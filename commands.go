@@ -24,6 +24,7 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	default:
 		s.ChannelMessageSend(m.ChannelID, "Command not found, try the 'help' command.")
 	}
+	s.ChannelMessageDelete(m.ChannelID, m.ID)
 }
 
 // Takes an array or strings (the arguments) and combines them into one string separated by spaces
@@ -46,19 +47,15 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 	playerName = playerName
 	switch args[0] {
 	case "player":
-		// I need to get the image data from this function and give that to s.ChannelFileSend() instead of using a file
 		playercard := riotPlayerCard(playerName)
-		buffer := bytes.NewBuffer(nil)
-		if buffer == nil {
-			fmt.Println("Error creating buffer")
-		}
-		png.Encode(buffer, playercard)
+		var buffer bytes.Buffer
+		png.Encode(&buffer, playercard)
 		/*reader, writer := io.Pipe()
 		go func() {
 			png.Encode(writer, playercard)
 		}()
 		file, err := os.Open("out.png")*/
-		_, err := s.ChannelFileSend(m.ChannelID, "playercard.png", buffer)
+		_, err := s.ChannelFileSend(m.ChannelID, "playercard.png", &buffer)
 		if err != nil {
 			fmt.Println("error uploading playercard:", err)
 		}

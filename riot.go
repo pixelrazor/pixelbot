@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"image/png"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -292,24 +290,7 @@ func riotPlayerCard(playername string) *image.RGBA {
 	if _, err := c.DrawString(commafy(strconv.FormatInt(int64(schamps[0].Points), 10)), pt); err != nil {
 		fmt.Println("error6:", err)
 	}
-	outFile, err := os.Create("out.png")
-	if err != nil {
-		fmt.Println("error7:", err)
-		os.Exit(1)
-	}
-	defer outFile.Close()
-	b := bufio.NewWriter(outFile)
-	err = png.Encode(b, rgba)
-	if err != nil {
-		fmt.Println("error8:", err)
-		os.Exit(1)
-	}
-	err = b.Flush()
-	if err != nil {
-		fmt.Println("error9:", err)
-		os.Exit(1)
-	}
-	fmt.Println("Wrote out.png OK.")
+	fmt.Println("Playercard created successfully!")
 	return rgba
 }
 
