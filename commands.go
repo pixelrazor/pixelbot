@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -37,10 +38,20 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 	} else if args[0] != "help" {
 		playerName = recombineArgs(args[1:])
 	}
-
+	playerName = playerName
 	switch args[0] {
 	case "player":
-		sinfo, sleagues := getPlayerInfo(playerName)
+		riotPlayerCard(playerName)
+		/*reader, writer := io.Pipe()
+		go func() {
+			png.Encode(writer, playercard)
+		}()*/
+		file, err := os.Open("out.png")
+		_, err = s.ChannelFileSend(m.ChannelID, "out.png", file)
+		if err != nil {
+			fmt.Println("error uploading playercard:", err)
+		}
+		/*sinfo, sleagues := getPlayerInfo(playerName)
 		fmt.Printf("%+v\n", sinfo)
 		var msg discordgo.MessageEmbed
 		msg.Title = "__**" + playerName + "**__"
@@ -72,7 +83,7 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 		_, err := s.ChannelMessageSendEmbed(m.ChannelID, &msg)
 		if err != nil {
 			fmt.Println("Error:", err)
-		}
+		}*/
 	case "match":
 		s.ChannelMessageSend(m.ChannelID, "Shit isn't working yet")
 	case "help":

@@ -27,10 +27,12 @@ func main() {
 		return
 	}
 	discord.AddHandler(messageCreate)
-	err = discord.Open()
-	if err != nil {
+	if err = discord.Open(); err != nil {
 		fmt.Println("error opening connection,", err)
 		return
+	}
+	if err = riotInit("7.24.2"); err != nil {
+		fmt.Println("Error during riotInit():", err)
 	}
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
