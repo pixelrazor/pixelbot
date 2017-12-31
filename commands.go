@@ -1,8 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
-	"os"
+	"image/png"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -46,13 +47,18 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 	switch args[0] {
 	case "player":
 		// I need to get the image data from this function and give that to s.ChannelFileSend() instead of using a file
-		riotPlayerCard(playerName)
+		playercard := riotPlayerCard(playerName)
+		buffer := bytes.NewBuffer(nil)
+		if buffer == nil {
+			fmt.Println("Error creating buffer")
+		}
+		png.Encode(buffer, playercard)
 		/*reader, writer := io.Pipe()
 		go func() {
 			png.Encode(writer, playercard)
-		}()*/
-		file, err := os.Open("out.png")
-		_, err = s.ChannelFileSend(m.ChannelID, "out.png", file)
+		}()
+		file, err := os.Open("out.png")*/
+		_, err := s.ChannelFileSend(m.ChannelID, "playercard.png", buffer)
 		if err != nil {
 			fmt.Println("error uploading playercard:", err)
 		}
