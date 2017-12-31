@@ -47,6 +47,7 @@ var riotKey string
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 var riotChamps map[int]string
 
+// Initialize some data for use later
 func riotInit(version string) error {
 	data, err := ioutil.ReadFile("league/" + version + ".json")
 	if err != nil {
@@ -61,6 +62,9 @@ func riotInit(version string) error {
 	}
 	return nil
 }
+
+// Get the body from a URL and return it only if it has a status code of 200
+// I should probably have this unmarshal the json data as well instead of doing it right after a call to this function
 func getURL(url string) []byte {
 	resp, err := httpClient.Get(url)
 	if err != nil {
@@ -76,6 +80,7 @@ func getURL(url string) []byte {
 	return data
 }
 
+// Get basic player info. (see summonerLeagues and summonerInfo structs)
 func riotPlayerInfo(name string) (summonerInfo, leaguesResult) {
 	var sinfo summonerInfo
 	sleagues := new(leaguesResult)
@@ -95,6 +100,7 @@ func riotPlayerInfo(name string) (summonerInfo, leaguesResult) {
 	return sinfo, *sleagues
 }
 
+// This is a big one, bear with me here. I'll try to clean it and make things more modular later
 func riotPlayerCard(playername string) *image.RGBA {
 	sinfo, sleagues := riotPlayerInfo(playername)
 	schamps := *new(masteryResult)
@@ -122,6 +128,8 @@ func riotPlayerCard(playername string) *image.RGBA {
 	urls[0] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[schamps[0].ID])
 	urls[1] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/profileicon/%v.png", sinfo.IconID)
 	files[0] = "league/bg.png"
+	// Account for unranked players here. this could really be avoided by renaming "default.png" to "_.png"
+	// I also need to store the directory path in a variable so when I change it I don't have to touch this code
 	if soloInfo.Tier == "" {
 		files[1] = "league/default.png"
 		soloInfo.Tier = "Unranked"
@@ -142,6 +150,7 @@ func riotPlayerCard(playername string) *image.RGBA {
 	files[6] = "league/champmask.png"
 	soloInfo.Tier = strings.ToTitle(strings.ToLower(soloInfo.Tier))
 	flexInfo.Tier = strings.ToTitle(strings.ToLower(flexInfo.Tier))
+	// Fill up the images array with the images. I need to label what each index is somewhere
 	for i, v := range urls {
 		url, err := http.Get(v)
 		if err != nil || url.StatusCode != 200 {
@@ -177,7 +186,7 @@ func riotPlayerCard(playername string) *image.RGBA {
 		fmt.Println("error parsing font:", err)
 		return nil
 	}
-	// DRAW IMAGE ---------------------------------------------------
+	// Draw image. There has to be some way I can tidy this up
 	rgba := image.NewRGBA(image.Rect(0, 0, 320, 570))
 	center := image.Pt(rgba.Bounds().Dx(), rgba.Bounds().Dy())
 	images[1] = resize.Resize(100, 0, images[1], resize.Lanczos3)
@@ -196,6 +205,7 @@ func riotPlayerCard(playername string) *image.RGBA {
 		images[7], image.ZP, draw.Over)
 	draw.Draw(rgba, image.Rect(center.X/2-images[6].Bounds().Dx()/2, 190, center.X/2-images[6].Bounds().Dx()/2+images[6].Bounds().Dx(),
 		images[6].Bounds().Dy()+190), images[6], image.ZP, draw.Over)
+	// Draw text. Probably needs to be cleaned more than anything else
 	c := freetype.NewContext()
 	c.SetDPI(72)
 	c.SetFont(f)
@@ -302,6 +312,8 @@ func riotPlayerCard(playername string) *image.RGBA {
 	fmt.Println("Wrote out.png OK.")
 	return rgba
 }
+
+// Take a number and add commas every three digits, from the left
 func commafy(s string) string {
 	newLength := len(s) + (len(s)-1)/3
 	newString := make([]byte, newLength)

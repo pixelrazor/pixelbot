@@ -8,6 +8,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// Parse commadns from the user
 func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	switch args[0] {
 	case "help":
@@ -23,6 +24,8 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		s.ChannelMessageSend(m.ChannelID, "Command not found, try the 'help' command.")
 	}
 }
+
+// Takes an array or strings (the arguments) and combines them into one string separated by spaces
 func recombineArgs(args []string) string {
 	var result string
 	for _, v := range args {
@@ -30,6 +33,7 @@ func recombineArgs(args []string) string {
 	}
 	return strings.TrimSpace(result)
 }
+
 func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	var playerName string
 	if len(args) < 2 && args[0] != "help" {
@@ -41,6 +45,7 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 	playerName = playerName
 	switch args[0] {
 	case "player":
+		// I need to get the image data from this function and give that to s.ChannelFileSend() instead of using a file
 		riotPlayerCard(playerName)
 		/*reader, writer := io.Pipe()
 		go func() {
@@ -51,39 +56,6 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 		if err != nil {
 			fmt.Println("error uploading playercard:", err)
 		}
-		/*sinfo, sleagues := getPlayerInfo(playerName)
-		fmt.Printf("%+v\n", sinfo)
-		var msg discordgo.MessageEmbed
-		msg.Title = "__**" + playerName + "**__"
-		msg.Fields = make([]*discordgo.MessageEmbedField, len(sleagues))
-		msg.Color = 0xb10fc6
-		msg.Thumbnail = new(discordgo.MessageEmbedThumbnail)
-		msg.Thumbnail.URL = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/profileicon/%v.png", sinfo.IconId)
-		msg.Thumbnail.Height = 64
-		msg.Thumbnail.Width = 64
-		for i, v := range sleagues {
-			field := new(discordgo.MessageEmbedField)
-			switch v.QueueType {
-			case "RANKED_FLEX_SR":
-				field.Name = "Flex 5v5"
-			case "RANKED_FLEX_TT":
-				field.Name = "Flex 3v3"
-			case "RANKED_SOLO_5x5":
-				field.Name = "Solo 5v5"
-			case "RANKED_TEAM_3x3":
-				field.Name = "Team 3v3"
-			case "RANKED_TEAM_5x5":
-				field.Name = "Team 5v5"
-			default:
-				field.Name = "Other"
-			}
-			field.Value = strings.Title(strings.ToLower(v.Tier)) + " " + v.Rank
-			msg.Fields[i] = field
-		}
-		_, err := s.ChannelMessageSendEmbed(m.ChannelID, &msg)
-		if err != nil {
-			fmt.Println("Error:", err)
-		}*/
 	case "match":
 		s.ChannelMessageSend(m.ChannelID, "Shit isn't working yet")
 	case "help":

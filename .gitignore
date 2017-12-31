@@ -25,3 +25,4 @@ _testmain.go
 
 # API keys
 *.key
+out.png
