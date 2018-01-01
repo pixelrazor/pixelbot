@@ -44,6 +44,20 @@ type masteryResult []champMastery
 var riotKey string
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 var riotChamps map[int]string
+var riotRegions = map[string]string{
+	"na":   "na1",
+	"br":   "br1",
+	"eune": "eun1",
+	"euw":  "euw1",
+	"jp":   "jp1",
+	"kr":   "kr",
+	"lan":  "la1",
+	"las":  "la2",
+	"oce":  "oc1",
+	"tr":   "tr1",
+	"ru":   "ru",
+	"pbe":  "pbe1",
+}
 
 // Initialize some data for use later
 func riotInit(version string) error {
@@ -62,7 +76,8 @@ func riotInit(version string) error {
 }
 
 // Get the body from a URL and return it only if it has a status code of 200
-// I should probably have this unmarshal the json data as well instead of doing it right after a call to this function
+// This should probably be in a different file
+// I should probably have this unmarshal the json data as well instead of doing it right after a call to this function (and return error instead of data)
 func getURL(url string) []byte {
 	resp, err := httpClient.Get(url)
 	if err != nil {
@@ -79,17 +94,17 @@ func getURL(url string) []byte {
 }
 
 // Get basic player info. (see summonerLeagues and summonerInfo structs)
-func riotPlayerInfo(name string) (summonerInfo, leaguesResult) {
+func riotPlayerInfo(name, region string) (summonerInfo, leaguesResult) {
 	var sinfo summonerInfo
 	sleagues := new(leaguesResult)
 	adjustedName := strings.Replace(name, " ", "%20", -1)
-	data := getURL("https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/" + adjustedName + "?api_key=" + riotKey)
+	data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/summoner/v3/summoners/by-name/%s?api_key=%s", region, adjustedName, riotKey))
 	err := json.Unmarshal(data, &sinfo)
 	if err != nil {
 		fmt.Println("Error getting summoner id:", err)
 		return sinfo, *sleagues
 	}
-	data = getURL(fmt.Sprintf("https://na1.api.riotgames.com/lol/league/v3/positions/by-summoner/%v?api_key=%s", sinfo.ID, riotKey))
+	data = getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/league/v3/positions/by-summoner/%v?api_key=%s", region, sinfo.ID, riotKey))
 	err = json.Unmarshal(data, &sleagues)
 	if err != nil {
 		fmt.Println("Error getting summoner leagues:", err, string(data))
@@ -99,10 +114,10 @@ func riotPlayerInfo(name string) (summonerInfo, leaguesResult) {
 }
 
 // This is a big one, bear with me here. I'll try to clean it and make things more modular later
-func riotPlayerCard(playername string) *image.RGBA {
-	sinfo, sleagues := riotPlayerInfo(playername)
+func riotPlayerCard(playername, region string) *image.RGBA {
+	sinfo, sleagues := riotPlayerInfo(playername, region)
 	schamps := *new(masteryResult)
-	data := getURL(fmt.Sprintf("https://na1.api.riotgames.com/lol/champion-mastery/v3/champion-masteries/by-summoner/%v?api_key=%s", sinfo.ID, riotKey))
+	data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/champion-mastery/v3/champion-masteries/by-summoner/%v?api_key=%s", region, sinfo.ID, riotKey))
 	err := json.Unmarshal(data, &schamps)
 	if err != nil {
 		fmt.Println("Error getting summoner champion masteries:", err, string(data))
@@ -146,8 +161,8 @@ func riotPlayerCard(playername string) *image.RGBA {
 	}
 	files[5] = fmt.Sprintf("league/level%vborder.png", schamps[0].Level)
 	files[6] = "league/champmask.png"
-	soloInfo.Tier = strings.ToTitle(strings.ToLower(soloInfo.Tier))
-	flexInfo.Tier = strings.ToTitle(strings.ToLower(flexInfo.Tier))
+	soloInfo.Tier = strings.Title(strings.ToLower(soloInfo.Tier))
+	flexInfo.Tier = strings.Title(strings.ToLower(flexInfo.Tier))
 	// Fill up the images array with the images. I need to label what each index is somewhere
 	for i, v := range urls {
 		url, err := http.Get(v)
@@ -193,9 +208,10 @@ func riotPlayerCard(playername string) *image.RGBA {
 	images[0] = resize.Resize(93, 0, images[0], resize.Lanczos3)
 	images[6] = resize.Resize(256, 0, images[6], resize.Lanczos3)
 	draw.Draw(rgba, rgba.Bounds(), images[2], image.Pt(images[2].Bounds().Dx()/2-center.X/2, images[2].Bounds().Dy()/2-center.Y/2), draw.Src)
+	draw.Draw(rgba, rgba.Bounds(), images[5], image.ZP, draw.Over)
+	// rgba has the background and border, I need to make a copy of the image at this point to use for the "back" of the card
 	draw.Draw(rgba, image.Rect(center.X/2-116, 230, center.X/2-16, 330), images[3], image.ZP, draw.Over)
 	draw.Draw(rgba, image.Rect(center.X/2+16, 230, center.X/2+116, 330), images[4], image.ZP, draw.Over)
-	draw.Draw(rgba, rgba.Bounds(), images[5], image.ZP, draw.Over)
 	draw.Draw(rgba, image.Rect(center.X/2-images[1].Bounds().Dx()/2, 32, center.X/2+images[1].Bounds().Dx()/2, images[1].Bounds().Dy()+32), images[1], image.ZP, draw.Src)
 	draw.DrawMask(rgba, image.Rect(center.X/2-images[0].Bounds().Dx()/2, 386, center.X/2+images[0].Bounds().Dx()/2, images[0].Bounds().Dy()+386),
 		images[0], image.ZP, images[8], image.ZP, draw.Over)
