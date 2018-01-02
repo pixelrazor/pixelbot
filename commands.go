@@ -44,7 +44,6 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 	} else if strings.ToLower(args[0]) != "help" {
 		playerName = recombineArgs(args[1:])
 	}
-	playerName = playerName
 	switch strings.ToLower(args[0]) {
 	case "player":
 		playercard := riotPlayerCard(playerName, region)

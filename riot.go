@@ -136,15 +136,12 @@ func riotPlayerInfo(name, region string) (summonerInfo, leaguesResult, []leagueM
 			break
 		}
 	}
-	fmt.Println(sMatches)
-
-	//https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=420&beginIndex=%v&season=9&api_key=%s
 	return sinfo, *sleagues, sMatches
 }
 
 // This is a big one, bear with me here. I'll try to clean it and make things more modular later
 func riotPlayerCard(playername, region string) *image.RGBA {
-	sinfo, sleagues, _ := riotPlayerInfo(playername, region)
+	sinfo, sleagues, smatches := riotPlayerInfo(playername, region)
 	schamps := *new(masteryResult)
 	data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/champion-mastery/v3/champion-masteries/by-summoner/%v?api_key=%s", region, sinfo.ID, riotKey))
 	err := json.Unmarshal(data, &schamps)
@@ -160,15 +157,42 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			soloInfo = v
 		}
 	}
+	roleMatches := make(map[string]int)
+	champMatches := make(map[int]int)
+	var mainRole string
+	var mainChamps [3]int
+	for _, v := range smatches {
+		roleMatches[v.Lane]++
+		champMatches[v.Champion]++
+		if roleMatches[v.Lane] > roleMatches[mainRole] {
+			mainRole = v.Lane
+		}
+	}
+	for k, v := range champMatches {
+		if v > champMatches[mainChamps[0]] {
+			mainChamps[0], mainChamps[1], mainChamps[2] = k, mainChamps[0], mainChamps[1]
+		} else if v > champMatches[mainChamps[1]] {
+			mainChamps[1], mainChamps[2] = k, mainChamps[1]
+		} else if v > champMatches[mainChamps[2]] {
+			mainChamps[2] = k
+		}
+	}
 	fmt.Println("--------\nName:", playername)
 	fmt.Println("Soloq:", soloInfo)
 	fmt.Println("Flexq:", flexInfo)
 	fmt.Println("Champ:", riotChamps[schamps[0].ID])
-	var urls [2]string
+	fmt.Println("Role:", mainRole)
+	fmt.Println("Main champs:", riotChamps[mainChamps[0]])
+	fmt.Println("Main champs:", riotChamps[mainChamps[1]])
+	fmt.Println("Main champs:", riotChamps[mainChamps[2]])
+	var urls [5]string
 	var files [7]string
-	var images [9]image.Image
+	var images [12]image.Image
 	urls[0] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[schamps[0].ID])
 	urls[1] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/profileicon/%v.png", sinfo.IconID)
+	urls[2] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[0]])
+	urls[3] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[1]])
+	urls[4] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[2]])
 	files[0] = "league/bg.png"
 	// Account for unranked players here. this could really be avoided by renaming "default.png" to "_.png"
 	// I also need to store the directory path in a variable so when I change it I don't have to touch this code
@@ -194,6 +218,9 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	flexInfo.Tier = strings.Title(strings.ToLower(flexInfo.Tier))
 	// Fill up the images array with the images. I need to label what each index is somewhere
 	for i, v := range urls {
+		if i >= 2 {
+			break
+		}
 		url, err := http.Get(v)
 		if err != nil || url.StatusCode != 200 {
 			fmt.Println("error getting image from url:", url.StatusCode, v, err)
@@ -218,6 +245,23 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			return nil
 		}
 	}
+	for i, v := range urls {
+		if i < 2 {
+			continue
+		}
+		url, err := http.Get(v)
+		if err != nil || url.StatusCode != 200 {
+			fmt.Println("error getting image from url:", url.StatusCode, v, err)
+			return nil
+		}
+		images[i+7], err = png.Decode(url.Body)
+		url.Body.Close()
+		if err != nil {
+			fmt.Println("error decoding image from url:", err)
+			return nil
+		}
+		images[i+7] = resize.Resize(75, 0, images[i+7], resize.Lanczos3)
+	}
 	fontFile, err := ioutil.ReadFile("league/FrizQuadrataTT.ttf")
 	if err != nil {
 		fmt.Println("error opening font:", err)
@@ -229,24 +273,31 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 		return nil
 	}
 	// Draw image. There has to be some way I can tidy this up
-	rgba := image.NewRGBA(image.Rect(0, 0, 320, 570))
-	center := image.Pt(rgba.Bounds().Dx(), rgba.Bounds().Dy())
+	front := image.NewRGBA(image.Rect(0, 0, 320, 570))
+	back := image.NewRGBA(image.Rect(0, 0, 320, 570))
+	both := image.NewRGBA(image.Rect(0, 0, 640, 570))
+	center := image.Pt(front.Bounds().Dx()/2, front.Bounds().Dy()/2)
 	images[1] = resize.Resize(100, 0, images[1], resize.Lanczos3)
 	images[3] = resize.Resize(100, 0, images[3], resize.Lanczos3)
 	images[4] = resize.Resize(100, 0, images[4], resize.Lanczos3)
 	images[0] = resize.Resize(93, 0, images[0], resize.Lanczos3)
 	images[6] = resize.Resize(256, 0, images[6], resize.Lanczos3)
-	draw.Draw(rgba, rgba.Bounds(), images[2], image.Pt(images[2].Bounds().Dx()/2-center.X/2, images[2].Bounds().Dy()/2-center.Y/2), draw.Src)
-	draw.Draw(rgba, rgba.Bounds(), images[5], image.ZP, draw.Over)
+	draw.Draw(front, front.Bounds(), images[2], image.Pt(images[2].Bounds().Dx()/2-center.X, images[2].Bounds().Dy()/2-center.Y), draw.Src)
+	draw.Draw(front, front.Bounds(), images[5], image.ZP, draw.Over)
 	// rgba has the background and border, I need to make a copy of the image at this point to use for the "back" of the card
-	draw.Draw(rgba, image.Rect(center.X/2-116, 230, center.X/2-16, 330), images[3], image.ZP, draw.Over)
-	draw.Draw(rgba, image.Rect(center.X/2+16, 230, center.X/2+116, 330), images[4], image.ZP, draw.Over)
-	draw.Draw(rgba, image.Rect(center.X/2-images[1].Bounds().Dx()/2, 32, center.X/2+images[1].Bounds().Dx()/2, images[1].Bounds().Dy()+32), images[1], image.ZP, draw.Src)
-	draw.DrawMask(rgba, image.Rect(center.X/2-images[0].Bounds().Dx()/2, 386, center.X/2+images[0].Bounds().Dx()/2, images[0].Bounds().Dy()+386),
+	draw.Draw(back, back.Bounds(), front, image.ZP, draw.Src)
+	draw.Draw(back, image.Rect(center.X-75/2-15-75, 64, center.X+75/2-15-75, 64+75), images[9], image.ZP, draw.Over)
+	draw.Draw(back, image.Rect(center.X-75/2, 32, center.X+75/2, 32+75), images[10], image.ZP, draw.Over)
+	draw.Draw(back, image.Rect(center.X-75/2+15+75, 64, center.X+75/2+15+75, 64+75), images[11], image.ZP, draw.Over)
+	// ----------------------
+	draw.Draw(front, image.Rect(center.X-116, 230, center.X-16, 330), images[3], image.ZP, draw.Over)
+	draw.Draw(front, image.Rect(center.X+16, 230, center.X+116, 330), images[4], image.ZP, draw.Over)
+	draw.Draw(front, image.Rect(center.X-images[1].Bounds().Dx()/2, 32, center.X+images[1].Bounds().Dx()/2, images[1].Bounds().Dy()+32), images[1], image.ZP, draw.Src)
+	draw.DrawMask(front, image.Rect(center.X-images[0].Bounds().Dx()/2, 386, center.X+images[0].Bounds().Dx()/2, images[0].Bounds().Dy()+386),
 		images[0], image.ZP, images[8], image.ZP, draw.Over)
-	draw.Draw(rgba, image.Rect(center.X/2-images[7].Bounds().Dx()/2, 380, center.X/2+images[7].Bounds().Dx()/2, images[7].Bounds().Dy()+380),
+	draw.Draw(front, image.Rect(center.X-images[7].Bounds().Dx()/2, 380, center.X+images[7].Bounds().Dx()/2, images[7].Bounds().Dy()+380),
 		images[7], image.ZP, draw.Over)
-	draw.Draw(rgba, image.Rect(center.X/2-images[6].Bounds().Dx()/2, 190, center.X/2-images[6].Bounds().Dx()/2+images[6].Bounds().Dx(),
+	draw.Draw(front, image.Rect(center.X-images[6].Bounds().Dx()/2, 190, center.X-images[6].Bounds().Dx()/2+images[6].Bounds().Dx(),
 		images[6].Bounds().Dy()+190), images[6], image.ZP, draw.Over)
 	// Draw text. Probably needs to be cleaned more than anything else
 	// TODO: make a function for width of a string: func(*context, string, fontsize)
@@ -254,7 +305,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	c.SetDPI(72)
 	c.SetFont(f)
 	c.SetFontSize(32)
-	c.SetClip(rgba.Bounds())
+	c.SetClip(front.Bounds())
 	c.SetSrc(image.White)
 	pt := freetype.Pt(0, 50)
 	temp := image.NewRGBA(image.Rect(0, 0, 300, 100))
@@ -270,8 +321,8 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			fmt.Println("error1:", err)
 		}
 	}
-	c.SetDst(rgba)
-	pt = freetype.Pt(rgba.Bounds().Dx()/2-int(endpoint.X>>6)/2, 180)
+	c.SetDst(front)
+	pt = freetype.Pt(center.X-int(endpoint.X>>6)/2, 180)
 	if _, err := c.DrawString(playername, pt); err != nil {
 		fmt.Println("error1:", err)
 	}
@@ -284,8 +335,8 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	if err != nil {
 		fmt.Println("error2:", err)
 	}
-	c.SetDst(rgba)
-	pt = freetype.Pt(rgba.Bounds().Dx()/2-16-50-int(endpoint.X>>6)/2, 345)
+	c.SetDst(front)
+	pt = freetype.Pt(center.X-16-50-int(endpoint.X>>6)/2, 345)
 	if _, err := c.DrawString("Solo", pt); err != nil {
 		fmt.Println("error2:", err)
 	}
@@ -296,8 +347,8 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	if err != nil {
 		fmt.Println("error3:", err)
 	}
-	c.SetDst(rgba)
-	pt = freetype.Pt(rgba.Bounds().Dx()/2+16+50-int(endpoint.X>>6)/2, 345)
+	c.SetDst(front)
+	pt = freetype.Pt(center.X+16+50-int(endpoint.X>>6)/2, 345)
 	if _, err := c.DrawString("Flex", pt); err != nil {
 		fmt.Println("error3:", err)
 	}
@@ -309,8 +360,8 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	if err != nil {
 		fmt.Println("error4:", err)
 	}
-	c.SetDst(rgba)
-	pt = freetype.Pt(rgba.Bounds().Dx()/2-16-50-int(endpoint.X>>6)/2, 345+20)
+	c.SetDst(front)
+	pt = freetype.Pt(center.X-16-50-int(endpoint.X>>6)/2, 345+20)
 	if _, err := c.DrawString(fmt.Sprintf("%s %s", soloInfo.Tier, soloInfo.Rank), pt); err != nil {
 		fmt.Println("error4:", err)
 	}
@@ -320,8 +371,8 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	if err != nil {
 		fmt.Println("error5:", err)
 	}
-	c.SetDst(rgba)
-	pt = freetype.Pt(rgba.Bounds().Dx()/2+16+50-int(endpoint.X>>6)/2, 345+20)
+	c.SetDst(front)
+	pt = freetype.Pt(center.X+16+50-int(endpoint.X>>6)/2, 345+20)
 	if _, err := c.DrawString(fmt.Sprintf("%s %s", flexInfo.Tier, flexInfo.Rank), pt); err != nil {
 		fmt.Println("error5:", err)
 	}
@@ -331,13 +382,16 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	if err != nil {
 		fmt.Println("error6:", err)
 	}
-	c.SetDst(rgba)
-	pt = freetype.Pt(rgba.Bounds().Dx()/2-int(endpoint.X>>6)/2, 540)
+	c.SetDst(front)
+	pt = freetype.Pt(center.X-int(endpoint.X>>6)/2, 540)
 	if _, err := c.DrawString(commafy(strconv.FormatInt(int64(schamps[0].Points), 10)), pt); err != nil {
 		fmt.Println("error6:", err)
 	}
 	fmt.Println("Playercard created successfully!")
-	return rgba
+
+	draw.Draw(both, front.Bounds(), front, image.ZP, draw.Src)
+	draw.Draw(both, front.Bounds().Add(image.Pt(321, 0)), back, image.ZP, draw.Src)
+	return both
 }
 
 // Take a number and add commas every three digits, from the left
