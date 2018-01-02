@@ -29,6 +29,8 @@ type summonerLeagues struct {
 	QueueType string `json:"queueType"`
 	Rank      string `json:"rank"`
 	Tier      string `json:"tier"`
+	Wins      int    `json:"wins"`
+	Losses    int    `json:"losses"`
 }
 type champMastery struct {
 	Level  int `json:"championLevel"`
@@ -37,6 +39,16 @@ type champMastery struct {
 }
 type champion struct {
 	Name string `json:"name"`
+}
+type leagueMatchList struct {
+	Matches    []leagueMatchReference `json:"matches"`
+	TotalGames int                    `json:"totalGames"`
+	StartIndex int                    `json:"startIndex"`
+	EndIndex   int                    `json:"endIndex"`
+}
+type leagueMatchReference struct {
+	Lane     string `json:"lane"`
+	Champion int    `json:"champion"`
 }
 type leaguesResult []summonerLeagues
 type masteryResult []champMastery
@@ -94,28 +106,45 @@ func getURL(url string) []byte {
 }
 
 // Get basic player info. (see summonerLeagues and summonerInfo structs)
-func riotPlayerInfo(name, region string) (summonerInfo, leaguesResult) {
+func riotPlayerInfo(name, region string) (summonerInfo, leaguesResult, []leagueMatchReference) {
 	var sinfo summonerInfo
+	var sMatches []leagueMatchReference
 	sleagues := new(leaguesResult)
 	adjustedName := strings.Replace(name, " ", "%20", -1)
 	data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/summoner/v3/summoners/by-name/%s?api_key=%s", region, adjustedName, riotKey))
 	err := json.Unmarshal(data, &sinfo)
 	if err != nil {
 		fmt.Println("Error getting summoner id:", err)
-		return sinfo, *sleagues
+		return sinfo, *sleagues, sMatches
 	}
 	data = getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/league/v3/positions/by-summoner/%v?api_key=%s", region, sinfo.ID, riotKey))
 	err = json.Unmarshal(data, &sleagues)
 	if err != nil {
 		fmt.Println("Error getting summoner leagues:", err, string(data))
-		return sinfo, *sleagues
+		return sinfo, *sleagues, sMatches
 	}
-	return sinfo, *sleagues
+	for i := 0; true; i += 100 {
+		var matchesResult leagueMatchList
+		data = getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=420&beginIndex=%v&season=9&api_key=%s", region, sinfo.AccountID, i, riotKey))
+		err = json.Unmarshal(data, &matchesResult)
+		if err != nil {
+			fmt.Println("Error getting summoner matches:", err, string(data))
+			return sinfo, *sleagues, sMatches
+		}
+		sMatches = append(sMatches, matchesResult.Matches...)
+		if matchesResult.TotalGames < i+100 {
+			break
+		}
+	}
+	fmt.Println(sMatches)
+
+	//https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=420&beginIndex=%v&season=9&api_key=%s
+	return sinfo, *sleagues, sMatches
 }
 
 // This is a big one, bear with me here. I'll try to clean it and make things more modular later
 func riotPlayerCard(playername, region string) *image.RGBA {
-	sinfo, sleagues := riotPlayerInfo(playername, region)
+	sinfo, sleagues, _ := riotPlayerInfo(playername, region)
 	schamps := *new(masteryResult)
 	data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/champion-mastery/v3/champion-masteries/by-summoner/%v?api_key=%s", region, sinfo.ID, riotKey))
 	err := json.Unmarshal(data, &schamps)
@@ -131,10 +160,10 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			soloInfo = v
 		}
 	}
-	fmt.Println("Name:", playername)
+	fmt.Println("--------\nName:", playername)
 	fmt.Println("Soloq:", soloInfo)
 	fmt.Println("Flexq:", flexInfo)
-	fmt.Println("Champ:", schamps[0])
+	fmt.Println("Champ:", riotChamps[schamps[0].ID])
 	var urls [2]string
 	var files [7]string
 	var images [9]image.Image
@@ -220,6 +249,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	draw.Draw(rgba, image.Rect(center.X/2-images[6].Bounds().Dx()/2, 190, center.X/2-images[6].Bounds().Dx()/2+images[6].Bounds().Dx(),
 		images[6].Bounds().Dy()+190), images[6], image.ZP, draw.Over)
 	// Draw text. Probably needs to be cleaned more than anything else
+	// TODO: make a function for width of a string: func(*context, string, fontsize)
 	c := freetype.NewContext()
 	c.SetDPI(72)
 	c.SetFont(f)

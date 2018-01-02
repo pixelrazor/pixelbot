@@ -77,10 +77,10 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 		msg.Fields[1].Name = "league match <player name>"
 		msg.Fields[1].Value = "View the current match data of an in-game player"
 		msg.Fields[2].Name = "league <region> <command>"
-		msg.Fields[2].Value = "Run the previous commands for other regions. Regions: br, eune, euw, jp, kr, lan, las, oce, tr, ru, pbe"
+		msg.Fields[2].Value = "Run the previous commands for other regions.\nRegions: __na__, __br__, __eune__, __euw__, __jp__, __kr__, __lan__, __las__, __oce__, __tr__, __ru__, __pbe__"
 		msg.Color = 0xb10fc6
 		s.ChannelMessageSendEmbed(m.ChannelID, &msg)
-	case "br", "eune", "euw", "jp", "kr", "lan", "las", "oce", "tr", "ru", "pbe":
+	case "na", "br", "eune", "euw", "jp", "kr", "lan", "las", "oce", "tr", "ru", "pbe":
 		leagueCommand(args[1:], s, m, riotRegions[strings.ToLower(args[0])])
 	default:
 		s.ChannelMessageSend(m.ChannelID, "Command not found, try the 'league help' command.")
