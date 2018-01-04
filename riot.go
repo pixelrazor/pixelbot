@@ -125,7 +125,7 @@ func riotPlayerInfo(name, region string) (summonerInfo, leaguesResult, []leagueM
 	}
 	for i := 0; true; i += 100 {
 		var matchesResult leagueMatchList
-		data = getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=420&beginIndex=%v&season=9&api_key=%s", region, sinfo.AccountID, i, riotKey))
+		data = getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=400&beginIndex=%v&season=9&api_key=%s", region, sinfo.AccountID, i, riotKey))
 		err = json.Unmarshal(data, &matchesResult)
 		if err != nil {
 			fmt.Println("Error getting summoner matches:", err, string(data))
@@ -141,7 +141,7 @@ func riotPlayerInfo(name, region string) (summonerInfo, leaguesResult, []leagueM
 
 // This is a big one, bear with me here. I'll try to clean it and make things more modular later
 func riotPlayerCard(playername, region string) *image.RGBA {
-	sinfo, sleagues, smatches := riotPlayerInfo(playername, region)
+	sinfo, sleagues, _ := riotPlayerInfo(playername, region)
 	schamps := *new(masteryResult)
 	data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/champion-mastery/v3/champion-masteries/by-summoner/%v?api_key=%s", region, sinfo.ID, riotKey))
 	err := json.Unmarshal(data, &schamps)
@@ -157,7 +157,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			soloInfo = v
 		}
 	}
-	roleMatches := make(map[string]int)
+	/*roleMatches := make(map[string]int)
 	champMatches := make(map[int]int)
 	var mainRole string
 	var mainChamps [3]int
@@ -176,23 +176,27 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 		} else if v > champMatches[mainChamps[2]] {
 			mainChamps[2] = k
 		}
-	}
+	}*/
+	champs := opggRankedChamps(strconv.FormatInt(int64(sinfo.ID), 10))
 	fmt.Println("--------\nName:", playername)
 	fmt.Println("Soloq:", soloInfo)
 	fmt.Println("Flexq:", flexInfo)
 	fmt.Println("Champ:", riotChamps[schamps[0].ID])
-	fmt.Println("Role:", mainRole)
+	/*fmt.Println("Role:", mainRole)
 	fmt.Println("Main champs:", riotChamps[mainChamps[0]])
 	fmt.Println("Main champs:", riotChamps[mainChamps[1]])
-	fmt.Println("Main champs:", riotChamps[mainChamps[2]])
+	fmt.Println("Main champs:", riotChamps[mainChamps[2]])*/
 	var urls [5]string
 	var files [7]string
 	var images [12]image.Image
 	urls[0] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[schamps[0].ID])
 	urls[1] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/profileicon/%v.png", sinfo.IconID)
-	urls[2] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[0]])
-	urls[3] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[1]])
-	urls[4] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[2]])
+	//urls[2] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[0]])
+	//urls[3] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[1]])
+	//urls[4] = fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[2]])
+	urls[2] = champs[0].imageURL
+	urls[3] = champs[1].imageURL
+	urls[4] = champs[2].imageURL
 	files[0] = "league/bg.png"
 	// Account for unranked players here. this could really be avoided by renaming "default.png" to "_.png"
 	// I also need to store the directory path in a variable so when I change it I don't have to touch this code
@@ -287,8 +291,10 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	// rgba has the background and border, I need to make a copy of the image at this point to use for the "back" of the card
 	draw.Draw(back, back.Bounds(), front, image.ZP, draw.Src)
 	draw.Draw(back, image.Rect(center.X-75/2-15-75, 64, center.X+75/2-15-75, 64+75), images[9], image.ZP, draw.Over)
-	draw.Draw(back, image.Rect(center.X-75/2, 32, center.X+75/2, 32+75), images[10], image.ZP, draw.Over)
+	draw.Draw(back, image.Rect(center.X-75/2, 64, center.X+75/2, 64+75), images[10], image.ZP, draw.Over)
 	draw.Draw(back, image.Rect(center.X-75/2+15+75, 64, center.X+75/2+15+75, 64+75), images[11], image.ZP, draw.Over)
+	draw.Draw(back, image.Rect(center.X-images[6].Bounds().Dx()/2, 200, center.X+images[6].Bounds().Dx()/2,
+		images[6].Bounds().Dy()+200), images[6], image.ZP, draw.Over)
 	// ----------------------
 	draw.Draw(front, image.Rect(center.X-116, 230, center.X-16, 330), images[3], image.ZP, draw.Over)
 	draw.Draw(front, image.Rect(center.X+16, 230, center.X+116, 330), images[4], image.ZP, draw.Over)
@@ -304,87 +310,125 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	c := freetype.NewContext()
 	c.SetDPI(72)
 	c.SetFont(f)
-	c.SetFontSize(32)
 	c.SetClip(front.Bounds())
 	c.SetSrc(image.White)
-	pt := freetype.Pt(0, 50)
-	temp := image.NewRGBA(image.Rect(0, 0, 300, 100))
-	c.SetDst(temp)
-	endpoint, err := c.DrawString(playername, pt)
-	if err != nil {
-		fmt.Println("error1:", err)
-	}
-	for fontSize := 30.0; int(endpoint.X>>6) > 256; fontSize -= 2 {
-		c.SetFontSize(fontSize)
-		endpoint, err = c.DrawString(playername, pt)
-		if err != nil {
-			fmt.Println("error1:", err)
-		}
-	}
 	c.SetDst(front)
-	pt = freetype.Pt(center.X-int(endpoint.X>>6)/2, 180)
+	for fontSize := 32; textWidth(c, playername, fontSize) > 256; fontSize -= 2 {
+	}
+	pt := freetype.Pt(center.X-textWidth(c, playername, 0)/2, 180)
 	if _, err := c.DrawString(playername, pt); err != nil {
 		fmt.Println("error1:", err)
 	}
 
 	c.SetFontSize(20)
-
-	c.SetDst(temp)
-	pt = freetype.Pt(0, 50)
-	endpoint, err = c.DrawString("Solo", pt)
-	if err != nil {
-		fmt.Println("error2:", err)
-	}
-	c.SetDst(front)
-	pt = freetype.Pt(center.X-16-50-int(endpoint.X>>6)/2, 345)
+	pt = freetype.Pt(center.X-16-50-textWidth(c, "Solo", 0)/2, 345)
 	if _, err := c.DrawString("Solo", pt); err != nil {
 		fmt.Println("error2:", err)
 	}
 
-	c.SetDst(temp)
-	pt = freetype.Pt(0, 50)
-	endpoint, err = c.DrawString("Flex", pt)
-	if err != nil {
-		fmt.Println("error3:", err)
-	}
-	c.SetDst(front)
-	pt = freetype.Pt(center.X+16+50-int(endpoint.X>>6)/2, 345)
+	pt = freetype.Pt(center.X+16+50-textWidth(c, "Flex", 0)/2, 345)
 	if _, err := c.DrawString("Flex", pt); err != nil {
 		fmt.Println("error3:", err)
 	}
-
 	c.SetFontSize(16)
-	c.SetDst(temp)
-	pt = freetype.Pt(0, 50)
-	endpoint, err = c.DrawString(fmt.Sprintf("%s %s", soloInfo.Tier, soloInfo.Rank), pt)
-	if err != nil {
-		fmt.Println("error4:", err)
-	}
-	c.SetDst(front)
-	pt = freetype.Pt(center.X-16-50-int(endpoint.X>>6)/2, 345+20)
+	pt = freetype.Pt(center.X-16-50-textWidth(c, fmt.Sprintf("%s %s", soloInfo.Tier, soloInfo.Rank), 0)/2, 345+20)
 	if _, err := c.DrawString(fmt.Sprintf("%s %s", soloInfo.Tier, soloInfo.Rank), pt); err != nil {
 		fmt.Println("error4:", err)
 	}
-	c.SetDst(temp)
-	pt = freetype.Pt(0, 50)
-	endpoint, err = c.DrawString(fmt.Sprintf("%s %s", flexInfo.Tier, flexInfo.Rank), pt)
-	if err != nil {
-		fmt.Println("error5:", err)
-	}
-	c.SetDst(front)
-	pt = freetype.Pt(center.X+16+50-int(endpoint.X>>6)/2, 345+20)
+	pt = freetype.Pt(center.X+16+50-textWidth(c, fmt.Sprintf("%s %s", flexInfo.Tier, flexInfo.Rank), 0)/2, 345+20)
 	if _, err := c.DrawString(fmt.Sprintf("%s %s", flexInfo.Tier, flexInfo.Rank), pt); err != nil {
 		fmt.Println("error5:", err)
 	}
-	c.SetDst(temp)
-	pt = freetype.Pt(0, 50)
-	endpoint, err = c.DrawString(commafy(strconv.FormatInt(int64(schamps[0].Points), 10)), pt)
-	if err != nil {
+
+	pt = freetype.Pt(center.X-textWidth(c, commafy(strconv.FormatInt(int64(schamps[0].Points), 10)), 0)/2, 540)
+	if _, err := c.DrawString(commafy(strconv.FormatInt(int64(schamps[0].Points), 10)), pt); err != nil {
 		fmt.Println("error6:", err)
 	}
-	c.SetDst(front)
-	pt = freetype.Pt(center.X-int(endpoint.X>>6)/2, 540)
-	if _, err := c.DrawString(commafy(strconv.FormatInt(int64(schamps[0].Points), 10)), pt); err != nil {
+
+	c.SetDst(back)
+	//64+75
+	// left
+	for fontSize := 14; true; fontSize-- {
+		if width := textWidth(c, champs[0].winRate, fontSize); width <= 75 {
+			pt = freetype.Pt(center.X-15-75-width/2, 160)
+			break
+		}
+	}
+	if _, err := c.DrawString(champs[0].winRate, pt); err != nil {
+		fmt.Println("error6:", err)
+	}
+	for fontSize := 14; true; fontSize-- {
+		if width := textWidth(c, champs[0].gamesPlayed, fontSize); width <= 75 {
+			pt = freetype.Pt(center.X-15-75-width/2, 176)
+			break
+		}
+	}
+	if _, err := c.DrawString(champs[0].gamesPlayed, pt); err != nil {
+		fmt.Println("error6:", err)
+	}
+	for fontSize := 14; true; fontSize-- {
+		if width := textWidth(c, champs[0].kda, fontSize); width <= 75 {
+			pt = freetype.Pt(center.X-15-75-width/2, 194)
+			break
+		}
+	}
+	if _, err := c.DrawString(champs[0].kda, pt); err != nil {
+		fmt.Println("error6:", err)
+	}
+	// Middle
+	for fontSize := 14; true; fontSize-- {
+		if width := textWidth(c, champs[1].winRate, fontSize); width <= 75 {
+			pt = freetype.Pt(center.X-width/2, 160)
+			break
+		}
+	}
+	if _, err := c.DrawString(champs[1].winRate, pt); err != nil {
+		fmt.Println("error6:", err)
+	}
+	for fontSize := 14; true; fontSize-- {
+		if width := textWidth(c, champs[1].gamesPlayed, fontSize); width <= 75 {
+			pt = freetype.Pt(center.X-width/2, 176)
+			break
+		}
+	}
+	if _, err := c.DrawString(champs[1].gamesPlayed, pt); err != nil {
+		fmt.Println("error6:", err)
+	}
+	for fontSize := 14; true; fontSize-- {
+		if width := textWidth(c, champs[1].kda, fontSize); width <= 75 {
+			pt = freetype.Pt(center.X-width/2, 194)
+			break
+		}
+	}
+	if _, err := c.DrawString(champs[1].kda, pt); err != nil {
+		fmt.Println("error6:", err)
+	}
+	// Right
+	for fontSize := 14; true; fontSize-- {
+		if width := textWidth(c, champs[2].winRate, fontSize); width <= 75 {
+			pt = freetype.Pt(center.X+15+75-width/2, 160)
+			break
+		}
+	}
+	if _, err := c.DrawString(champs[2].winRate, pt); err != nil {
+		fmt.Println("error6:", err)
+	}
+	for fontSize := 14; true; fontSize-- {
+		if width := textWidth(c, champs[2].gamesPlayed, fontSize); width <= 75 {
+			pt = freetype.Pt(center.X+15+75-width/2, 176)
+			break
+		}
+	}
+	if _, err := c.DrawString(champs[2].gamesPlayed, pt); err != nil {
+		fmt.Println("error6:", err)
+	}
+	for fontSize := 14; true; fontSize-- {
+		if width := textWidth(c, champs[2].kda, fontSize); width <= 75 {
+			pt = freetype.Pt(center.X+15+75-width/2, 194)
+			break
+		}
+	}
+	if _, err := c.DrawString(champs[2].kda, pt); err != nil {
 		fmt.Println("error6:", err)
 	}
 	fmt.Println("Playercard created successfully!")
@@ -392,6 +436,24 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	draw.Draw(both, front.Bounds(), front, image.ZP, draw.Src)
 	draw.Draw(both, front.Bounds().Add(image.Pt(321, 0)), back, image.ZP, draw.Src)
 	return both
+}
+
+// Get the width in pixel of a string (if size is 0, use whatever was set previously)
+// If font size is specified, it WILL change the font size for the given freetype *Context
+func textWidth(c *freetype.Context, text string, size int) int {
+	temp := image.NewRGBA(image.Rect(0, 0, 300, 100))
+	pt := freetype.Pt(0, 50)
+	if size > 0 {
+		c.SetFontSize(float64(size))
+	}
+	ftcopy := *c
+	ftcopy.SetDst(temp)
+	endpoint, err := ftcopy.DrawString(text, pt)
+	if err != nil {
+		fmt.Println("Error getting text width:", err)
+		return -1
+	}
+	return int(endpoint.X >> 6)
 }
 
 // Take a number and add commas every three digits, from the left
