@@ -218,8 +218,8 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	}
 	files[5] = fmt.Sprintf("league/level%vborder.png", schamps[0].Level)
 	files[6] = "league/champmask.png"
-	soloInfo.Tier = strings.Title(strings.ToLower(soloInfo.Tier))
-	flexInfo.Tier = strings.Title(strings.ToLower(flexInfo.Tier))
+	soloInfo.Tier = titlefy(soloInfo.Tier)
+	flexInfo.Tier = titlefy(flexInfo.Tier)
 	// Fill up the images array with the images. I need to label what each index is somewhere
 	for i, v := range urls {
 		if i >= 2 {
@@ -293,8 +293,8 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	draw.Draw(back, image.Rect(center.X-75/2-15-75, 64, center.X+75/2-15-75, 64+75), images[9], image.ZP, draw.Over)
 	draw.Draw(back, image.Rect(center.X-75/2, 64, center.X+75/2, 64+75), images[10], image.ZP, draw.Over)
 	draw.Draw(back, image.Rect(center.X-75/2+15+75, 64, center.X+75/2+15+75, 64+75), images[11], image.ZP, draw.Over)
-	draw.Draw(back, image.Rect(center.X-images[6].Bounds().Dx()/2, 200, center.X+images[6].Bounds().Dx()/2,
-		images[6].Bounds().Dy()+200), images[6], image.ZP, draw.Over)
+	draw.Draw(back, image.Rect(center.X-128, 205, center.X+128,
+		images[6].Bounds().Dy()+205), images[6], image.ZP, draw.Over)
 	// ----------------------
 	draw.Draw(front, image.Rect(center.X-116, 230, center.X-16, 330), images[3], image.ZP, draw.Over)
 	draw.Draw(front, image.Rect(center.X+16, 230, center.X+116, 330), images[4], image.ZP, draw.Over)
@@ -303,7 +303,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 		images[0], image.ZP, images[8], image.ZP, draw.Over)
 	draw.Draw(front, image.Rect(center.X-images[7].Bounds().Dx()/2, 380, center.X+images[7].Bounds().Dx()/2, images[7].Bounds().Dy()+380),
 		images[7], image.ZP, draw.Over)
-	draw.Draw(front, image.Rect(center.X-images[6].Bounds().Dx()/2, 190, center.X-images[6].Bounds().Dx()/2+images[6].Bounds().Dx(),
+	draw.Draw(front, image.Rect(center.X-128, 190, center.X-128+images[6].Bounds().Dx(),
 		images[6].Bounds().Dy()+190), images[6], image.ZP, draw.Over)
 	// Draw text. Probably needs to be cleaned more than anything else
 	// TODO: make a function for width of a string: func(*context, string, fontsize)
@@ -431,6 +431,10 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	if _, err := c.DrawString(champs[2].kda, pt); err != nil {
 		fmt.Println("error6:", err)
 	}
+	pt = freetype.Pt(center.X-textWidth(c, "Main Role: "+titlefy("JUNGLE"), 16)/2, 260)
+	if _, err := c.DrawString("Main Role: "+titlefy("JUNGLE"), pt); err != nil {
+		fmt.Println("error6:", err)
+	}
 	fmt.Println("Playercard created successfully!")
 
 	draw.Draw(both, front.Bounds(), front, image.ZP, draw.Src)
@@ -473,4 +477,9 @@ func commafy(s string) string {
 		newLength--
 	}
 	return string(newString)
+}
+
+// calling both functions from the strings package to get all caps into titles is annoying
+func titlefy(text string) string {
+	return strings.Title(strings.ToLower(text))
 }

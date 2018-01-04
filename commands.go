@@ -59,7 +59,7 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 			fmt.Println("error uploading playercard:", err)
 		}
 	case "match":
-		s.ChannelMessageSend(m.ChannelID, "Shit isn't working yet")
+		s.ChannelMessageSend(m.ChannelID, "WIP, try again later please")
 	case "help":
 		var msg discordgo.MessageEmbed
 		msg.Title = "__**League Commands**__"
