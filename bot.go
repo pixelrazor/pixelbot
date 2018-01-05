@@ -53,6 +53,10 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 	message := strings.Fields(m.Content)
+	if message[0][0] == '/' {
+		message[0] = message[0][1:]
+		parse(message, s, m)
+	}
 	for _, v := range m.Mentions {
 		if v.ID == s.State.User.ID {
 			parse(message[1:], s, m)
