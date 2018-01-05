@@ -15,16 +15,16 @@ type leagueMostChamps struct {
 	kda         string
 }
 
-func opggRankedChamps(summonerID string) []leagueMostChamps {
+func opggRankedChamps(summonerID, region string) []leagueMostChamps {
 	var champs []leagueMostChamps
 	var champ *leagueMostChamps
-	response, err := http.Get("http://na.op.gg/summoner/ajax/championMost/renew.json/summonerId=" + summonerID)
+	response, err := http.Get("http://" + region + ".op.gg/summoner/ajax/championMost/renew.json/summonerId=" + summonerID)
 	if err != nil {
 		fmt.Println("Error refreshing summoner info:", err)
 		return champs
 	}
 	response.Body.Close()
-	response, err = http.Get("http://na.op.gg/summoner/champions/ajax/champions.most/summonerId=" + summonerID + "&season=7")
+	response, err = http.Get("http://" + region + ".op.gg/summoner/champions/ajax/champions.most/summonerId=" + summonerID + "&season=7")
 	if err != nil {
 		fmt.Println("Error getting summoner mostChamps:", err)
 		return champs
@@ -69,5 +69,4 @@ func opggRankedChamps(summonerID string) []leagueMostChamps {
 			}
 		}
 	}
-	return champs
 }

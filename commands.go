@@ -24,7 +24,7 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	default:
 		s.ChannelMessageSend(m.ChannelID, "Command not found, try the 'help' command.")
 	}
-	s.ChannelMessageDelete(m.ChannelID, m.ID)
+	//s.ChannelMessageDelete(m.ChannelID, m.ID)
 }
 
 // Takes an array or strings (the arguments) and combines them into one string separated by spaces
@@ -76,7 +76,7 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 		msg.Fields[1].Name = "league match <player name>"
 		msg.Fields[1].Value = "View the current match data of an in-game player"
 		msg.Fields[2].Name = "league <region> <command>"
-		msg.Fields[2].Value = "Run the previous commands for other regions.\nRegions: __na__, __br__, __eune__, __euw__, __jp__, __kr__, __lan__, __las__, __oce__, __tr__, __ru__, __pbe__"
+		msg.Fields[2].Value = "Run the previous commands for other regions.\nRegions: __na__, __br__, __eune__, __euw__, __jp__, __kr__, __lan__, __las__, __oce__, __tr__, __ru__"
 		msg.Color = 0xb10fc6
 		s.ChannelMessageSendEmbed(m.ChannelID, &msg)
 	case "na", "br", "eune", "euw", "jp", "kr", "lan", "las", "oce", "tr", "ru", "pbe":
