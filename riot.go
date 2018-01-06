@@ -475,6 +475,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			fmt.Println("Error writing text:", k, err)
 		}
 	}
+	fmt.Println("test4")
 	imageInfo = cardBack.images["insignia"]
 	imageInfo.image = cardFront.images["insignia"].image
 	cardBack.images["insignia"] = imageInfo
@@ -488,10 +489,12 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	textData.point.X -= textWidth(c, textData.text, textData.fontSize) / 2
 	cardBack.text["secondaryRole"] = textData
 	if len(champs) > 0 {
+		fmt.Println("test in ranked champs")
 		var images map[string]imageData
 		text := mostChampsText()
 		switch {
 		case len(champs) >= 3:
+			fmt.Println("test in ranked champs 3")
 			images = mostChampsTemplates(3)
 			imageInfo = images["left"]
 			imageInfo.image = loadImage(champs[0].imageURL)
@@ -504,6 +507,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			images["right"] = imageInfo
 
 		case len(schamps) == 2:
+			fmt.Println("test in ranked champs 2")
 			images = mostChampsTemplates(2)
 			imageInfo = images["left"]
 			imageInfo.image = loadImage(champs[0].imageURL)
@@ -515,9 +519,10 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			cardBack.images["right"] = images["right"]
 
 		case len(schamps) == 1:
+			fmt.Println("test in ranked champs 1")
 			images = mostChampsTemplates(1)
 			imageInfo = images["middle"]
-			imageInfo.image = loadImage(champs[1].imageURL)
+			imageInfo.image = loadImage(champs[0].imageURL)
 			images["middle"] = imageInfo
 			cardBack.images["middle"] = images["middle"]
 
@@ -561,6 +566,8 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			i++
 		}
 	} else if len(mainChamps) > 0 {
+
+		fmt.Println("test in not ranked champs")
 		var images map[string]imageData
 		text := mostChampsText()
 		switch {
@@ -613,6 +620,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 		}
 
 	}
+	fmt.Println("test5")
 
 	for _, v := range cardBack.images {
 		draw.Draw(back, v.area, v.image, image.ZP, draw.Over)
