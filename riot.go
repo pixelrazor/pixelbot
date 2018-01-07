@@ -167,29 +167,29 @@ func summonerCardBack() cardTemplate {
 	}
 }
 
-func mostChampsTemplates(n int) map[string]imageData {
-	return [3]map[string]imageData{
-		map[string]imageData{
-			"middle": imageData{
+func mostChampsTemplates(n int) []imageData {
+	return [3][]imageData{
+		[]imageData{
+			imageData{
 				area:  image.Rect(123, 64, 197, 139),
 				point: image.ZP,
 			},
-		}, map[string]imageData{
-			"left": imageData{
+		}, []imageData{
+			imageData{
 				area:  image.Rect(68, 64, 143, 139),
 				point: image.ZP,
-			}, "right": imageData{
+			}, imageData{
 				area:  image.Rect(177, 64, 252, 139),
 				point: image.ZP,
 			},
-		}, map[string]imageData{
-			"left": imageData{
+		}, []imageData{
+			imageData{
 				area:  image.Rect(33, 64, 107, 139),
 				point: image.ZP,
-			}, "middle": imageData{
+			}, imageData{
 				area:  image.Rect(123, 64, 197, 139),
 				point: image.ZP,
-			}, "right": imageData{
+			}, imageData{
 				area:  image.Rect(213, 64, 287, 139),
 				point: image.ZP,
 			},
@@ -318,7 +318,6 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			mainRoles[1] = k
 		}
 	}
-	fmt.Printf("%+v\n", roleMatches)
 	for i, v := range mainRoles {
 		if v == "" {
 			mainRoles[i] = "N/A"
@@ -447,17 +446,14 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 		textData.fontSize--
 	}
 	cardFront.text["name"] = textData
-
 	textData = cardFront.text["soloRank"]
 	textData.text = fmt.Sprintf("%s %s", titlefy(soloInfo.Tier), soloInfo.Rank)
 	textData.point.X -= textWidth(c, textData.text, textData.fontSize) / 2
 	cardFront.text["soloRank"] = textData
-
 	textData = cardFront.text["flexRank"]
 	textData.text = fmt.Sprintf("%s %s", titlefy(flexInfo.Tier), flexInfo.Rank)
 	textData.point.X -= textWidth(c, textData.text, textData.fontSize) / 2
 	cardFront.text["flexRank"] = textData
-
 	if len(schamps) > 0 {
 		textData := cardFront.text["masteryPoints"]
 		textData.text = commafy(strconv.FormatInt(int64(schamps[0].Points), 10))
@@ -475,11 +471,9 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			fmt.Println("Error writing text:", k, err)
 		}
 	}
-	fmt.Println("test4")
 	imageInfo = cardBack.images["insignia"]
 	imageInfo.image = cardFront.images["insignia"].image
 	cardBack.images["insignia"] = imageInfo
-
 	textData = cardBack.text["mainRole"]
 	textData.text += mainRoles[0]
 	textData.point.X -= textWidth(c, textData.text, textData.fontSize) / 2
@@ -489,47 +483,19 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	textData.point.X -= textWidth(c, textData.text, textData.fontSize) / 2
 	cardBack.text["secondaryRole"] = textData
 	if len(champs) > 0 {
-		fmt.Println("test in ranked champs")
-		var images map[string]imageData
+		var images []imageData
 		text := mostChampsText()
-		switch {
-		case len(champs) >= 3:
-			fmt.Println("test in ranked champs 3")
+		if len(champs) > 3 {
 			images = mostChampsTemplates(3)
-			imageInfo = images["left"]
-			imageInfo.image = loadImage(champs[0].imageURL)
-			images["left"] = imageInfo
-			imageInfo = images["middle"]
-			imageInfo.image = loadImage(champs[1].imageURL)
-			images["middle"] = imageInfo
-			imageInfo = images["right"]
-			imageInfo.image = loadImage(champs[2].imageURL)
-			images["right"] = imageInfo
-
-		case len(schamps) == 2:
-			fmt.Println("test in ranked champs 2")
-			images = mostChampsTemplates(2)
-			imageInfo = images["left"]
-			imageInfo.image = loadImage(champs[0].imageURL)
-			images["left"] = imageInfo
-			imageInfo = images["right"]
-			imageInfo.image = loadImage(champs[1].imageURL)
-			images["right"] = imageInfo
-			cardBack.images["left"] = images["left"]
-			cardBack.images["right"] = images["right"]
-
-		case len(schamps) == 1:
-			fmt.Println("test in ranked champs 1")
-			images = mostChampsTemplates(1)
-			imageInfo = images["middle"]
-			imageInfo.image = loadImage(champs[0].imageURL)
-			images["middle"] = imageInfo
-			cardBack.images["middle"] = images["middle"]
-
+		} else {
+			images = mostChampsTemplates(len(champs))
+		}
+		for i := range images {
+			images[i].image = loadImage(champs[i].imageURL)
 		}
 		i := 0
 		for k, v := range images {
-			cardBack.images[k] = v
+			cardBack.images[strconv.FormatInt(int64(k), 10)] = v
 			textData = text["played"]
 			textData.text = champs[i].gamesPlayed
 			textData.point.X = (images[k].area.Max.X-images[k].area.Min.X)/2 + images[k].area.Min.X
@@ -540,7 +506,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 				}
 				textData.fontSize--
 			}
-			cardBack.text[k+"played"] = textData
+			cardBack.text[fmt.Sprintf("%v%s", k, "played")] = textData
 			textData = text["kda"]
 			textData.text = champs[i].kda
 			textData.point.X = (images[k].area.Max.X-images[k].area.Min.X)/2 + images[k].area.Min.X
@@ -551,7 +517,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 				}
 				textData.fontSize--
 			}
-			cardBack.text[k+"kda"] = textData
+			cardBack.text[fmt.Sprintf("%v%s", k, "kda")] = textData
 			textData = text["winrate"]
 			textData.text = champs[i].winRate
 			textData.point.X = (images[k].area.Max.X-images[k].area.Min.X)/2 + images[k].area.Min.X
@@ -562,49 +528,23 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 				}
 				textData.fontSize--
 			}
-			cardBack.text[k+"winrate"] = textData
+			cardBack.text[fmt.Sprintf("%v%s", k, "winrate")] = textData
 			i++
 		}
 	} else if len(mainChamps) > 0 {
-
-		fmt.Println("test in not ranked champs")
-		var images map[string]imageData
+		var images []imageData
 		text := mostChampsText()
-		switch {
-		case len(mainChamps) >= 3:
+		if len(mainChamps) > 3 {
 			images = mostChampsTemplates(3)
-			imageInfo = images["left"]
-			imageInfo.image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[0]])), resize.Lanczos3)
-			images["left"] = imageInfo
-			imageInfo = images["middle"]
-			imageInfo.image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[1]])), resize.Lanczos3)
-			images["middle"] = imageInfo
-			imageInfo = images["right"]
-			imageInfo.image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[2]])), resize.Lanczos3)
-			images["right"] = imageInfo
-
-		case len(mainChamps) == 2:
-			images = mostChampsTemplates(2)
-			imageInfo = images["left"]
-			imageInfo.image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[0]])), resize.Lanczos3)
-			images["left"] = imageInfo
-			imageInfo = images["right"]
-			imageInfo.image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[1]])), resize.Lanczos3)
-			images["right"] = imageInfo
-			cardBack.images["left"] = images["left"]
-			cardBack.images["right"] = images["right"]
-
-		case len(mainChamps) == 1:
-			images = mostChampsTemplates(1)
-			imageInfo = images["middle"]
-			imageInfo.image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[0]])), resize.Lanczos3)
-			images["middle"] = imageInfo
-			cardBack.images["middle"] = images["middle"]
-
+		} else {
+			images = mostChampsTemplates(len(mainChamps))
+		}
+		for i := range images {
+			images[i].image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[i]])), resize.Lanczos3)
 		}
 		i := 0
 		for k, v := range images {
-			cardBack.images[k] = v
+			cardBack.images[strconv.FormatInt(int64(k), 10)] = v
 			textData = text["played"]
 			textData.text += commafy(strconv.FormatInt(int64(champMatches[mainChamps[i]]), 10))
 			textData.point.X = (images[k].area.Max.X-images[k].area.Min.X)/2 + images[k].area.Min.X
@@ -615,12 +555,10 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 				}
 				textData.fontSize--
 			}
-			cardBack.text[k+"played"] = textData
+			cardBack.text[fmt.Sprintf("%v%s", k, "played")] = textData
 			i++
 		}
-
 	}
-	fmt.Println("test5")
 
 	for _, v := range cardBack.images {
 		draw.Draw(back, v.area, v.image, image.ZP, draw.Over)
@@ -633,7 +571,6 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 		}
 	}
 	fmt.Println("Playercard created successfully!")
-
 	draw.Draw(both, front.Bounds(), front, image.ZP, draw.Src)
 	draw.Draw(both, front.Bounds().Add(image.Pt(321, 0)), back, image.ZP, draw.Src)
 	return both
