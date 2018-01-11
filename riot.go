@@ -68,6 +68,23 @@ type leagueMatchList struct {
 type leagueMatchReference struct {
 	Lane     string `json:"lane"`
 	Champion int    `json:"champion"`
+	ID       int    `json:"gameId"`
+}
+type riotMatchDto struct {
+	SeasonID       int                          `json:"seasonId"`
+	ParticipantIDs []riotParticipantIdentityDto `json:"participantIdentities"`
+	Participants   []riotParticipantDto         `json:"participants"`
+}
+type riotParticipantIdentityDto struct {
+	Player riotPlayerDto `json:"player"`
+	ID     int           `json:"participantId"`
+}
+type riotPlayerDto struct {
+	AccountID int `json:"currentAccountID"`
+}
+type riotParticipantDto struct {
+	Tier string `json:"highestAchievedSeasonTier"`
+	ID   int    `json:"participantId"`
 }
 type leaguesResult []summonerLeagues
 type masteryResult []champMastery
@@ -87,6 +104,15 @@ var riotRegions = map[string]string{
 	"oce":  "oc1",
 	"tr":   "tr1",
 	"ru":   "ru",
+}
+var riotRanks = map[string]int{
+	"BRONZE":     1,
+	"SILVER":     2,
+	"GOLD":       3,
+	"PLATINUM":   4,
+	"DIAMOND":    5,
+	"MASTER":     6,
+	"CHALLENGER": 7,
 }
 
 func summonerCardFront() cardTemplate {
@@ -285,6 +311,59 @@ func riotPlayerInfo(name, region string) (summonerInfo, leaguesResult, leagueMat
 	return sinfo, *sleagues, matchesResult
 }
 
+// Attempt to get a Player's Solo rank
+func riotPastRanks(c *freetype.Context, ID, accountID int, region string) cardTemplate {
+	var ranks cardTemplate
+	ranks.images = make(map[string]imageData)
+	ranks.text = make(map[string]textData)
+	var seasonRanks []string
+	var seasons []int
+	for k, v := range map[int]int{9: 420, 7: 410, 5: 4} {
+		var matchesResult leagueMatchList
+		data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=%v&season=%v&api_key=%s", region, accountID, v, k, riotKey))
+		if err := json.Unmarshal(data, &matchesResult); err != nil {
+			fmt.Println("Error getting past ranks:", err)
+			return ranks
+		}
+		if len(matchesResult.Matches) > 0 {
+			var match riotMatchDto
+			data = getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v3/matches/%v?api_key=%s", region, matchesResult.Matches[0].ID, riotKey))
+			if err := json.Unmarshal(data, &match); err != nil {
+				fmt.Println("Error getting past ranks:", err)
+				return ranks
+			}
+			for _, j := range match.ParticipantIDs {
+				if j.Player.AccountID == accountID {
+					for _, k := range match.Participants {
+						if k.ID == j.ID && k.Tier != "UNRANKED" {
+							seasonRanks = append(seasonRanks, k.Tier)
+							seasons = append(seasons, match.SeasonID)
+						}
+					}
+				}
+			}
+		}
+	}
+	var ranksImages []imageData
+	if len(seasonRanks) > 3 {
+		ranksImages = mostChampsTemplates(3)
+	} else if len(seasonRanks) > 0 {
+		ranksImages = mostChampsTemplates(len(seasonRanks))
+	}
+	for i, v := range seasonRanks {
+		var text textData
+		ranksImages[i].area = image.Rect(ranksImages[i].area.Min.X, 350, ranksImages[i].area.Max.X, 425)
+		ranksImages[i].image = resize.Resize(75, 0, loadImage(fmt.Sprintf("league/rank/%s_I.png", v)), resize.Lanczos3)
+		ranks.images[fmt.Sprintf("%v%s", seasons[i], v)] = ranksImages[i]
+		text.fontSize = 12
+		text.text = fmt.Sprintf("Season %v", seasons[i]/2+2)
+		text.point = image.Pt((ranksImages[i].area.Min.X+ranksImages[i].area.Max.X)/2-textWidth(c, text.text, text.fontSize)/2, 435)
+		ranks.text[fmt.Sprintf("%v%s", seasons[i], v)] = text
+	}
+	return ranks
+}
+
+// Create and return a playercard
 func riotPlayerCard(playername, region string) *image.RGBA {
 	// Gather palyer data
 	sinfo, sleagues, smatches := riotPlayerInfo(playername, region)
@@ -297,8 +376,10 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	}
 	var soloInfo, flexInfo summonerLeagues
 	for _, v := range sleagues {
-		if v.QueueType == "RANKED_FLEX_SR" {
-			flexInfo = v
+		if v.QueueType == "RANKED_FLEX_SR" || v.QueueType == "RANKED_FLEX_TT" {
+			if riotRanks[v.Tier] > riotRanks[flexInfo.Tier] {
+				flexInfo = v
+			}
 		} else if v.QueueType == "RANKED_SOLO_5x5" {
 			soloInfo = v
 		}
@@ -404,16 +485,16 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	cardFront.images["border"] = imageInfo
 	cardBack.images["border"] = imageInfo
 	imageInfo = cardFront.images["profileIcon"]
-	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/profileicon/%v.png", sinfo.IconID)), resize.Lanczos3)
+	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/8.1.1/img/profileicon/%v.png", sinfo.IconID)), resize.Lanczos3)
 	cardFront.images["profileIcon"] = imageInfo
 	imageInfo = cardFront.images["insignia"]
 	imageInfo.image = resize.Resize(256, 0, loadImage(fmt.Sprintf("league/insignia/%sinsignia.png", strings.ToLower(soloInfo.Tier))), resize.Lanczos3)
 	cardFront.images["insignia"] = imageInfo
 	imageInfo = cardFront.images["solo"]
-	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/rank/%s_%s.png", strings.ToLower(soloInfo.Tier), soloInfo.Rank)), resize.Lanczos3)
+	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/rank/%s_%s.png", soloInfo.Tier, soloInfo.Rank)), resize.Lanczos3)
 	cardFront.images["solo"] = imageInfo
 	imageInfo = cardFront.images["flex"]
-	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/rank/%s_%s.png", strings.ToLower(flexInfo.Tier), flexInfo.Rank)), resize.Lanczos3)
+	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/rank/%s_%s.png", flexInfo.Tier, flexInfo.Rank)), resize.Lanczos3)
 	cardFront.images["flex"] = imageInfo
 	if soloInfo.Tier == "" {
 		soloInfo.Tier = "Unranked"
@@ -427,7 +508,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 		cardFront.images["masteryBorder"] = imageInfo
 
 		imageInfo = cardFront.images["masteryChamp"]
-		imageInfo.image = resize.Resize(93, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[schamps[0].ID])), resize.Lanczos3)
+		imageInfo.image = resize.Resize(93, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/8.1.1/img/champion/%s.png", riotChamps[schamps[0].ID])), resize.Lanczos3)
 		imageInfo.mask = loadImage("league/champmask.png")
 		cardFront.images["masteryChamp"] = imageInfo
 		draw.DrawMask(front, cardFront.images["masteryChamp"].area, cardFront.images["masteryChamp"].image, image.ZP, cardFront.images["masteryChamp"].mask, image.ZP, draw.Over)
@@ -450,6 +531,12 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	textData.text = fmt.Sprintf("%s %s", titlefy(soloInfo.Tier), soloInfo.Rank)
 	textData.point.X -= textWidth(c, textData.text, textData.fontSize) / 2
 	cardFront.text["soloRank"] = textData
+	if flexInfo.QueueType == "RANKED_FLEX_TT" {
+		textData = cardFront.text["Flex"]
+		textData.text = "Flex 3v3"
+		textData.point.X = 226 - textWidth(c, textData.text, textData.fontSize)/2
+		cardFront.text["Flex"] = textData
+	}
 	textData = cardFront.text["flexRank"]
 	textData.text = fmt.Sprintf("%s %s", titlefy(flexInfo.Tier), flexInfo.Rank)
 	textData.point.X -= textWidth(c, textData.text, textData.fontSize) / 2
@@ -474,6 +561,8 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	imageInfo = cardBack.images["insignia"]
 	imageInfo.image = cardFront.images["insignia"].image
 	cardBack.images["insignia"] = imageInfo
+	imageInfo.area = image.Rect(imageInfo.area.Min.X, 290, imageInfo.area.Max.X, 325)
+	cardBack.images["insignia2"] = imageInfo
 	textData = cardBack.text["mainRole"]
 	textData.text += mainRoles[0]
 	textData.point.X -= textWidth(c, textData.text, textData.fontSize) / 2
@@ -540,7 +629,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			images = mostChampsTemplates(len(mainChamps))
 		}
 		for i := range images {
-			images[i].image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/7.24.2/img/champion/%s.png", riotChamps[mainChamps[i]])), resize.Lanczos3)
+			images[i].image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/8.1.1/img/champion/%s.png", riotChamps[mainChamps[i]])), resize.Lanczos3)
 		}
 		i := 0
 		for k, v := range images {
@@ -559,7 +648,19 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 			i++
 		}
 	}
-
+	oldRanks := riotPastRanks(c, sinfo.ID, sinfo.AccountID, region)
+	if len(oldRanks.images) > 0 {
+		textData.text = "Previous ranks"
+		textData.fontSize = 20
+		textData.point = image.Pt(160-textWidth(c, textData.text, textData.fontSize)/2, 348)
+		cardBack.text["previous"] = textData
+	}
+	for k, v := range oldRanks.images {
+		cardBack.images[k] = v
+	}
+	for k, v := range oldRanks.text {
+		cardBack.text[k] = v
+	}
 	for _, v := range cardBack.images {
 		draw.Draw(back, v.area, v.image, image.ZP, draw.Over)
 	}
