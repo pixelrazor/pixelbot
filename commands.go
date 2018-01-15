@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"image/png"
 	"strings"
 
@@ -46,18 +45,36 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 	}
 	switch strings.ToLower(args[0]) {
 	case "player":
-		playercard := riotPlayerCard(playerName, region)
+		playercard := riotPlayerCard(&playerName, region)
 		var buffer bytes.Buffer
 		png.Encode(&buffer, playercard)
 		/*reader, writer := io.Pipe()
 		go func() {
 			png.Encode(writer, playercard)
 		}()
-		file, err := os.Open("out.png")*/
+		file, err := os.Open("out.png")
 		_, err := s.ChannelFileSend(m.ChannelID, "playercard.png", &buffer)
 		if err != nil {
 			fmt.Println("error uploading playercard:", err)
+		}*/
+		cardFile := discordgo.File{
+			Name:   "playercard.png",
+			Reader: &buffer,
 		}
+		var embed discordgo.MessageEmbed
+		embed.Title = "__**" + playerName + "**__"
+		embed.Image = new(discordgo.MessageEmbedImage)
+		embed.Image.URL = "attachment://playercard.png"
+		embed.Footer = new(discordgo.MessageEmbedFooter)
+		embed.Footer.Text = m.Author.Username
+		embed.Footer.IconURL = m.Author.AvatarURL("32")
+		embed.Color = 0xb10fc6
+		mesg := discordgo.MessageSend{
+			Embed: &embed,
+			Files: []*discordgo.File{&cardFile},
+		}
+		s.ChannelMessageSendComplex(m.ChannelID, &mesg)
+		s.ChannelMessageDelete(m.ChannelID, m.ID)
 	case "match":
 		s.ChannelMessageSend(m.ChannelID, "WIP, try again later please")
 	case "help":

@@ -318,9 +318,13 @@ func riotPastRanks(c *freetype.Context, ID, accountID int, region string) cardTe
 	ranks.text = make(map[string]textData)
 	var seasonRanks []string
 	var seasons []int
-	for k, v := range map[int]int{9: 420, 7: 410, 5: 4} {
+	for _, v := range []struct{ season, queue int }{
+		struct{ season, queue int }{5, 4},
+		struct{ season, queue int }{7, 410},
+		struct{ season, queue int }{9, 420},
+	} {
 		var matchesResult leagueMatchList
-		data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=%v&season=%v&api_key=%s", region, accountID, v, k, riotKey))
+		data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=%v&season=%v&api_key=%s", region, accountID, v.queue, v.season, riotKey))
 		if err := json.Unmarshal(data, &matchesResult); err != nil {
 			fmt.Println("Error getting past ranks:", err)
 			return ranks
@@ -364,9 +368,10 @@ func riotPastRanks(c *freetype.Context, ID, accountID int, region string) cardTe
 }
 
 // Create and return a playercard
-func riotPlayerCard(playername, region string) *image.RGBA {
+func riotPlayerCard(playername *string, region string) *image.RGBA {
 	// Gather palyer data
-	sinfo, sleagues, smatches := riotPlayerInfo(playername, region)
+	sinfo, sleagues, smatches := riotPlayerInfo(*playername, region)
+	*playername = sinfo.Name
 	schamps := *new(masteryResult)
 	data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/champion-mastery/v3/champion-masteries/by-summoner/%v?api_key=%s", region, sinfo.ID, riotKey))
 	err := json.Unmarshal(data, &schamps)
@@ -465,7 +470,7 @@ func riotPlayerCard(playername, region string) *image.RGBA {
 	c.SetClip(front.Bounds())
 	c.SetSrc(image.White)
 	c.SetDst(front)
-	fmt.Println("--------\nName:", playername)
+	fmt.Println("--------\nName:", *playername)
 	fmt.Println("Soloq:", soloInfo)
 	fmt.Println("Flexq:", flexInfo)
 	fmt.Println("Champ:", riotChamps[schamps[0].ID])
