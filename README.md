@@ -3,4 +3,4 @@ Pixel Bot is my own Discord Bot project. More documentation will be added as the
 ## League Playercards
 Here's a sample playercard the the bot generated:
 
-![example playercard](https://raw.githubusercontent.com/pixelrazor/pixelbot/master/out.png)
+![example playercard](out.png)
