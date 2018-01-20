@@ -23,7 +23,17 @@ func main() {
 	}
 	file.Close()
 	// Create the bot
-	discord, err := discordgo.New("Bot Mzk0MjM5OTA0MjMxNzE4OTEy.DSBo3g.34D4NitI3_ABo8D2zd9nWsG0amI")
+	file, err = os.Open("discordapi.key")
+	if err != nil {
+		fmt.Println("Error opening Discord API key file:", err)
+	}
+	var discordKey string
+	if scanner := bufio.NewScanner(file); scanner.Scan() {
+		discordKey = scanner.Text()
+		fmt.Println("Discord api key:", discordKey)
+	}
+	file.Close()
+	discord, err := discordgo.New("Bot "+discordKey)
 	if err != nil {
 		fmt.Println("woops:", err)
 		return

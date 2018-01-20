@@ -318,13 +318,29 @@ func riotPastRanks(c *freetype.Context, ID, accountID int, region string) cardTe
 	ranks.text = make(map[string]textData)
 	var seasonRanks []string
 	var seasons []int
-	for _, v := range []struct{ season, queue int }{
-		struct{ season, queue int }{5, 4},
-		struct{ season, queue int }{7, 410},
-		struct{ season, queue int }{9, 420},
+	for _, v := range []struct {
+		season int
+		queue  string
+	}{
+		struct {
+			season int
+			queue  string
+		}{5, "4&queue=2&queue=65"},
+		struct {
+			season int
+			queue  string
+		}{7, "410&queue=2&queue=65"},
+		struct {
+			season int
+			queue  string
+		}{9, ""},
+		struct {
+			season int
+			queue  string
+		}{11, ""},
 	} {
 		var matchesResult leagueMatchList
-		data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=%v&season=%v&api_key=%s", region, accountID, v.queue, v.season, riotKey))
+		data := getURL(fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v3/matchlists/by-account/%v?queue=%s&season=%v&api_key=%s", region, accountID, v.queue, v.season, riotKey))
 		if err := json.Unmarshal(data, &matchesResult); err != nil {
 			fmt.Println("Error getting past ranks:", err)
 			return ranks
@@ -351,6 +367,8 @@ func riotPastRanks(c *freetype.Context, ID, accountID int, region string) cardTe
 	var ranksImages []imageData
 	if len(seasonRanks) > 3 {
 		ranksImages = mostChampsTemplates(3)
+		seasonRanks = seasonRanks[len(seasonRanks)-3:]
+		seasons = seasons[len(seasons)-3:]
 	} else if len(seasonRanks) > 0 {
 		ranksImages = mostChampsTemplates(len(seasonRanks))
 	}
