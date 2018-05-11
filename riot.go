@@ -285,7 +285,6 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	leaguesChan := make(chan errChan, 1)
 	matchesChan := make(chan errChan, 1)
 	opggchampsChan := make(chan []leagueMostChamps, 1)
-	t1 := time.Now()
 	sinfo, err := riotClient.GetBySummonerName(ctx, region, *playername)
 	if err != nil {
 		return nil, errors.New("Couldn't find summoner '" + *playername + "'")
@@ -641,7 +640,6 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	fmt.Println("Playercard created successfully!")
 	draw.Draw(both, front.Bounds(), front, image.ZP, draw.Src)
 	draw.Draw(both, front.Bounds().Add(image.Pt(321, 0)), back, image.ZP, draw.Src)
-	fmt.Println("Time to make playercard:", time.Now().Sub(t1).Seconds())
 	return both, nil
 }
 
