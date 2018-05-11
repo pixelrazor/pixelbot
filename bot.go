@@ -33,7 +33,7 @@ func main() {
 		fmt.Println("Discord api key:", discordKey)
 	}
 	file.Close()
-	discord, err := discordgo.New("Bot "+discordKey)
+	discord, err := discordgo.New("Bot " + discordKey)
 	if err != nil {
 		fmt.Println("woops:", err)
 		return
@@ -69,7 +69,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 	for _, v := range m.Mentions {
 		if v.ID == s.State.User.ID {
-			parse(message[1:], s, m)
+			parse(strings.Fields(strings.Replace(m.Content, v.Mention(), "", -1)), s, m)
 		}
 
 	}
