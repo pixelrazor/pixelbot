@@ -20,9 +20,18 @@ _cgo_export.*
 _testmain.go
 
 *.exe
+*.exe~
 *.test
 *.prof
 
 # API keys
 *.key
 riottest\.go
+
+# databases
+*.db
+*.db.lock
+
+# helper scripts
+*.bat
+*.sh
