@@ -13,7 +13,7 @@ Commands can be in one of two formats
 or
 > @pixelbot commands arguments
 
-In the second format, the mention can be added __anywhere__ in the message (**command @pixel bot args**)
+In the second format, the mention can be added __anywhere__ in the message (**command @pixelbot args**)
 # Features
 - [League of Legends](#league)
     - [x] [Playercards](#lcard)

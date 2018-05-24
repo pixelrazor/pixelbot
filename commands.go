@@ -23,7 +23,7 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	case "help":
 		var msg discordgo.MessageEmbed
 		msg.Title = "__**Pixel Bot Commands**__"
-		msg.Description = "All commands can be called by doing '/command arguments' or by pinging me anywhere in it (ex: 'help @pixelbot' or '@pixelbot help'"
+		msg.Description = "All commands can be called by doing '/command arguments' or by pinging me anywhere in it (ex: 'help @pixelbot' or '@pixelbot help')"
 		msg.Fields = make([]*discordgo.MessageEmbedField, 2)
 		msg.Footer = new(discordgo.MessageEmbedFooter)
 		msg.Footer.Text = m.Author.Username

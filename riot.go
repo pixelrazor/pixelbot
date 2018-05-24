@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pixelrazor/pixelbot/league"
+
 	"github.com/boltdb/bolt"
 
 	"github.com/PuerkitoBio/goquery"
@@ -97,6 +99,10 @@ func riotInit() error {
 				json.Unmarshal(asd, ddchamps)
 				res.Body.Close()
 				riotChamps = ddchamps.toMap()
+				ddragon.GetChamps(patches[0])
+				ddragon.GetIcons(patches[0])
+				ddragon.GetRunes(patches[0])
+				ddragon.GetSumms(patches[0])
 			}
 			riotPatch = patches[0]
 			res.Body.Close()
@@ -127,7 +133,6 @@ func riotVerify(playername, discordID string, region region.Region) (string, err
 		_, ok := riotVerified[key]
 		if ok {
 			delete(riotVerified, key)
-			fmt.Println("Deleted a verification code")
 		}
 	}()
 	return code, nil
@@ -149,7 +154,6 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 	if err != nil {
 		return errors.New("Unknown error occured")
 	}
-	fmt.Println(pcode, code)
 	if pcode != code {
 		return errors.New("Error: your verification code does not match the summoner's")
 	}
@@ -176,13 +180,13 @@ func riotPastRanks(c *freetype.Context, username, region string) cardTemplate {
 	var seasons []int
 	res, err := http.Get("http://" + region + ".op.gg/summoner/userName=" + strings.Replace(username, " ", "+", -1))
 	if err != nil {
-		fmt.Println("Error getting past ranks")
+		logger.Println("Error getting past ranks")
 		return ranks
 	}
 	defer res.Body.Close()
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		fmt.Println("Error getting past ranks")
+		logger.Println("Error getting past ranks")
 		return ranks
 	}
 	doc.Find(".PastRankList li").Each(func(i int, s *goquery.Selection) {
@@ -280,7 +284,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	}()
 	result, open := <-masteryChan
 	if result.err != nil || !open {
-		fmt.Println("mastery error", result.err, open)
+		logger.Println("mastery error", result.err, open)
 		return nil, errors.New("Unknown issue, try again later")
 	}
 	schamps := result.value.([]apiclient.ChampionMastery)
@@ -289,7 +293,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	}
 	result = <-leaguesChan
 	if result.err != nil {
-		fmt.Println("leagues error", result.err, open)
+		logger.Println("leagues error", result.err, open)
 		return nil, errors.New("Unknown issue, try again later")
 	}
 	sleagues := result.value.([]apiclient.LeaguePosition)
@@ -305,19 +309,19 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	}
 	result = <-matchesChan
 	if result.err != nil {
-		fmt.Println("matches error", result.err, open)
+		logger.Println("matches error", result.err, open)
 		return nil, errors.New("Unknown issue, try again later")
 	}
 	smatches := result.value.(*apiclient.Matchlist)
 	imagesChan := make(chan image.Image, 4)
 	defer close(imagesChan)
 	go func() {
-		imagesChan <- loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/%v/img/profileicon/%v.png", riotPatch, sinfo.ProfileIconID))
+		imagesChan <- loadImage(fmt.Sprintf("league/profileicon/%v.png", sinfo.ProfileIconID))
 		imagesChan <- loadImage(fmt.Sprintf("league/insignia/%sinsignia.png", strings.ToLower(string(soloInfo.Tier))))
 		imagesChan <- loadImage(fmt.Sprintf("league/rank/%s_%s.png", soloInfo.Tier, soloInfo.Rank))
 		imagesChan <- loadImage(fmt.Sprintf("league/rank/%s_%s.png", flexInfo.Tier, flexInfo.Rank))
 		if len(schamps) > 0 {
-			imagesChan <- loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/%v/img/champion/%s.png", riotPatch, riotChamps[schamps[0].ChampionID]))
+			imagesChan <- loadImage(fmt.Sprintf("league/champion/%d.png", schamps[0].ChampionID))
 		}
 	}()
 	roleMatches := make(map[lane.Lane]int)
@@ -328,7 +332,16 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 		n     int
 	}
 	for _, v := range smatches.Matches {
-		roleMatches[v.Lane]++
+		switch {
+		case v.Role == "DUO_SUPPORT":
+			roleMatches["Support"]++
+		case v.Role == "DUO_CARRY":
+			roleMatches["ADC"]++
+		case v.Lane == "MID", v.Lane == "MIDDLE":
+			roleMatches["Mid"]++
+		case v.Lane != "NONE" && v.Lane != "BOT" && v.Lane != "BOTTOM":
+			roleMatches[v.Lane]++
+		}
 		champMatches[v.Champion]++
 	}
 	if _, ok := roleMatches["NONE"]; ok {
@@ -351,7 +364,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	for i, v := range mainRoles {
 		if v == "" {
 			mainRoles[i] = "N/A"
-		} else {
+		} else if mainRoles[i] != "ADC" {
 			mainRoles[i] = lane.Lane(titlefy(string(mainRoles[i])))
 		}
 	}
@@ -360,12 +373,12 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	// Create images and freetype context
 	fontFile, err := ioutil.ReadFile("league/FrizQuadrataTT.TTF")
 	if err != nil {
-		fmt.Println("error opening font:", err)
+		logger.Println("error opening font:", err)
 		return nil, nil
 	}
 	f, err := freetype.ParseFont(fontFile)
 	if err != nil {
-		fmt.Println("error parsing font:", err)
+		logger.Println("error parsing font:", err)
 		return nil, nil
 	}
 	front := image.NewRGBA(image.Rect(0, 0, 320, 570))
@@ -377,10 +390,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	c.SetClip(front.Bounds())
 	c.SetSrc(image.White)
 	c.SetDst(front)
-	fmt.Println("--------\nName:", *playername)
-	fmt.Println("Champ:", riotChamps[schamps[0].ChampionID])
-	fmt.Println("Main role:", mainRoles[0])
-	fmt.Println("Secondary role:", mainRoles[1])
+	logger.Printf("Playercard: %v %v\n", region, *playername)
 	// Load the templates and fill in the missing info.
 	oldRanksChan := make(chan cardTemplate, 1)
 	defer close(oldRanksChan)
@@ -479,7 +489,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	for k, v := range cardFront.text {
 		c.SetFontSize(float64(v.fontSize))
 		if _, err := c.DrawString(v.text, pointToFixed(v.point)); err != nil {
-			fmt.Println("Error writing text:", k, err)
+			logger.Println("Error writing text:", k, err)
 		}
 	}
 	imageInfo = cardBack.images["insignia"]
@@ -553,7 +563,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 			images = mostChampsTemplates(len(mainChamps))
 		}
 		for i := range images {
-			images[i].image = resize.Resize(75, 0, loadImage(fmt.Sprintf("http://ddragon.leagueoflegends.com/cdn/%v/img/champion/%s.png", riotPatch, riotChamps[mainChamps[i].champ])), resize.Lanczos3)
+			images[i].image = resize.Resize(75, 0, loadImage(fmt.Sprintf("league/champion/%d.png", mainChamps[i].champ)), resize.Lanczos3)
 		}
 		i := 0
 		for k, v := range images {
@@ -588,7 +598,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	_ = riotDB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("quotes"))
 		if b == nil {
-			fmt.Println("Error opening quote bucket")
+			logger.Println("Error opening quote bucket")
 			return errors.New("Error opening bucket???")
 		}
 		v := b.Get([]byte(fmt.Sprint("%v%v", sinfo.AccountID, region)))
@@ -604,10 +614,10 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	for k, v := range cardBack.text {
 		c.SetFontSize(float64(v.fontSize))
 		if _, err := c.DrawString(v.text, pointToFixed(v.point)); err != nil {
-			fmt.Println("Error writing text:", k, err)
+			logger.Println("Error writing text:", k, err)
 		}
 	}
-	fmt.Println("Playercard created successfully!")
+	logger.Println("Playercard created successfully!")
 	draw.Draw(both, front.Bounds(), front, image.ZP, draw.Src)
 	draw.Draw(both, front.Bounds().Add(image.Pt(321, 0)), back, image.ZP, draw.Src)
 	return both, nil
@@ -625,7 +635,7 @@ func textWidth(c *freetype.Context, text string, size int) int {
 	ftcopy.SetDst(temp)
 	endpoint, err := ftcopy.DrawString(text, pt)
 	if err != nil {
-		fmt.Println("Error getting text width:", err)
+		logger.Println("Error getting text width:", err)
 		return -1
 	}
 	return int(endpoint.X >> 6)
@@ -664,25 +674,25 @@ func loadImage(path string) image.Image {
 	if strings.Contains(path, "http") {
 		response, err := http.Get(path)
 		if err != nil || response.StatusCode != 200 {
-			fmt.Println("error getting image from url:", response.StatusCode, path, err)
+			logger.Println("error getting image from url:", response.StatusCode, path, err)
 			return nil
 		}
 		image, err := png.Decode(response.Body)
 		response.Body.Close()
 		if err != nil {
-			fmt.Println("error decoding image from url:", err)
+			logger.Println("error decoding image from url:", err)
 			return nil
 		}
 		return image
 	}
 	file, err := ioutil.ReadFile(path)
 	if err != nil {
-		fmt.Println("error reading file:", path, err)
+		logger.Println("error reading file:", path, err)
 		return nil
 	}
 	image, err := png.Decode(bytes.NewReader(file))
 	if err != nil {
-		fmt.Println("error decoding image from file:", err)
+		logger.Println("error decoding image from file:", err)
 		return nil
 	}
 	return image

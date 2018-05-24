@@ -3,15 +3,23 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
+var logger *log.Logger
+
 func main() {
+	os.Mkdir("logs", os.ModeDir)
+	f, _ := os.Create("logs/" + time.Now().Format("2006-01-02_15-04-05") + ".log")
+	defer f.Close()
+	logger = log.New(f, "", log.LstdFlags)
 	// Load the API key
 	file, err := os.Open("riotapi.key")
 	if err != nil {
@@ -54,13 +62,16 @@ func main() {
 	defer riotDB.Close()
 	// I need to change the to allow for administration commands from the prompt
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
-	fmt.Printf("%-20v\t%v\n", "Server", "Members")
-	for _, v := range discord.State.Guilds {
-		fmt.Printf("%-20v\t%v\n", v.Name, v.MemberCount)
-	}
+	consoleQuit := make(chan struct{})
+	go console(discord, consoleQuit)
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
-	<-sc
+	select {
+	case sig := <-sc:
+		fmt.Println("Quiting due to signal", sig)
+	case <-consoleQuit:
+		fmt.Println("Quit from console")
+	}
 	discord.Close()
 }
 
