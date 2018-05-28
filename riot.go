@@ -32,6 +32,7 @@ import (
 	"golang.org/x/image/math/fixed"
 
 	"github.com/golang/freetype"
+	"github.com/golang/freetype/truetype"
 	"github.com/nfnt/resize"
 )
 
@@ -241,10 +242,119 @@ func riotAddQuote(quote string, tdata map[string]textData, c *freetype.Context) 
 	}
 	return
 }
+func riotMakeInGame(playername string, region region.Region) (*image.RGBA, string, int, error) {
+	summoner, err := riotClient.GetBySummonerName(ctx, region, playername)
+	if err != nil {
+		return nil, "",0, errors.New("Summoner not found: " + err.Error())
+	}
+	info, err := riotClient.GetCurrentGameInfoBySummoner(ctx, region, summoner.ID)
+	if err != nil {
+		return nil, "",0, errors.New("Summoner not in game: " + err.Error())
+	}
+	fontFile, err := ioutil.ReadFile("league/FrizQuadrataTT.TTF")
+	if err != nil {
+		return nil, "",0, errors.New("Error opening font: " + err.Error())
+	}
+	f, err := freetype.ParseFont(fontFile)
+	if err != nil {
+		return nil, "",0, errors.New("Error parsing font: " + err.Error())
+	}
+	names := make([]int64, len(info.Participants))
+	blue := 1
+	red := 1
+	left := make(chan riotInGameCH)
+	right := make(chan riotInGameCH)
+	defer close(left)
+	defer close(right)
+	for _, v := range info.Participants {
+		if v.TeamId == 100 {
+			go riotMakeParticipant(left, f, v, blue)
+			names[blue-1] = v.SummonerId
+			blue++
+		} else {
+			go riotMakeParticipant(right, f, v, 5+red)
+			names[len(info.Participants)/2+red-1] = v.SummonerId
+			red++
+		}
+	}
+	var ingame *image.RGBA
+	if red > blue {
+		ingame = image.NewRGBA(image.Rect(0, 0, 700, (red-1)*64))
+	} else {
+		ingame = image.NewRGBA(image.Rect(0, 0, 700, (blue-1)*64))
+	}
+	bg := loadImage("league/ingame.png")
+	draw.Draw(ingame, ingame.Bounds(), bg, image.ZP, draw.Src)
+	for i := 0; i < blue-1; i++ {
+		player := <-left
+		draw.Draw(ingame, player.card.Bounds().Add(image.Pt(0, 64*(player.num-1))), player.card, image.ZP, draw.Over)
+	}
+	for i := 0; i < red-1; i++ {
+		player := <-right
+		draw.Draw(ingame, player.card.Bounds().Add(image.Pt(366, 64*((player.num-1)%(red-1)))), player.card, image.ZP, draw.Over)
+	}
+	/*file, _ := os.Create("test.png")
+	defer file.Close()
+	png.Encode(file, ingame)*/
+	filename := string(region)
+	for _, v := range names {
+		filename += fmt.Sprintf("_%v", v)
+	}
+	filename += ".png"
+	return ingame, filename,len(info.Participants), nil
+}
+func riotMakeParticipant(done chan riotInGameCH, font *truetype.Font, player apiclient.CurrentGameParticipant, num int) {
+	styles := [][]image.Point{
+		{
+			{270, 0},
+			{238, 0},
+			{238, 32},
+			{206, 0},
+			{206, 32},
+			{106, 36},
+			{4, 36},
+		},
+		{
+			{0, 0},
+			{64, 0},
+			{64, 32},
+			{96, 0},
+			{96, 32},
+			{228, 36},
+			{320, 36},
+		},
+	}
+	style := styles[player.TeamId/100-1]
+	card := image.NewRGBA(image.Rect(0, 0, 334, 64))
+	c := freetype.NewContext()
+	c.SetDPI(72)
+	c.SetFont(font)
+	c.SetClip(card.Bounds())
+	c.SetSrc(image.White)
+	c.SetDst(card)
+	champ := resize.Resize(64, 0, loadImage(fmt.Sprintf("league/champion/%v.png", player.ChampionId)), resize.Lanczos3)
+	s1 := resize.Resize(32, 0, loadImage(fmt.Sprintf("league/summoners/%v.png", player.Spell1Id)), resize.Lanczos3)
+	s2 := resize.Resize(32, 0, loadImage(fmt.Sprintf("league/summoners/%v.png", player.Spell2Id)), resize.Lanczos3)
+	r1 := resize.Resize(32, 0, loadImage(fmt.Sprintf("league/runes/%v.png", player.Perks.PerkStyle)), resize.Lanczos3)
+	r2 := resize.Resize(32, 0, loadImage(fmt.Sprintf("league/runes/%v.png", player.Perks.PerkSubStyle)), resize.Lanczos3)
+	draw.Draw(card, champ.Bounds().Add(style[0]), champ, image.ZP, draw.Over)
+	draw.Draw(card, s1.Bounds().Add(style[1]), s1, image.ZP, draw.Over)
+	draw.Draw(card, s2.Bounds().Add(style[2]), s2, image.ZP, draw.Over)
+	draw.Draw(card, r1.Bounds().Add(style[3]), r1, image.ZP, draw.Over)
+	draw.Draw(card, r2.Bounds().Add(style[4]), r2, image.ZP, draw.Over)
+	c.SetFontSize(16)
+	c.DrawString(player.SummonerName, freetype.Pt(style[5].X-textWidth(c, player.SummonerName, 16)/2, style[5].Y))
+	c.SetFontSize(12)
+	c.DrawString(fmt.Sprintf("%v", num), freetype.Pt(style[6].X, style[6].Y))
+	done <- riotInGameCH{
+		card,
+		num,
+	}
+}
 
 // Create and return a playercard
 func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, error) {
-	// Gather playyer data
+	// Gather player data
 	//sinfo, sleagues, smatches := riotPlayerInfo(*playername, region)
 	masteryChan := make(chan errChan, 1)
 	leaguesChan := make(chan errChan, 1)

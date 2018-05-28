@@ -2,6 +2,7 @@ package main
 
 import (
 	"image"
+	"regexp"
 
 	"github.com/yuhanfang/riot/constants/champion"
 	"github.com/yuhanfang/riot/constants/region"
@@ -36,6 +37,10 @@ type ddchamp struct {
 	ID  string
 	Key int `json:",string"`
 }
+type riotInGameCH struct {
+	card *image.RGBA
+	num  int
+}
 type ddchampions struct {
 	Data map[string]ddchamp
 }
@@ -48,6 +53,7 @@ func (obj *ddchampions) toMap() map[champion.Champion]string {
 	return newMap
 }
 
+var riotInGameFile = regexp.MustCompile(`[A-Z]+[0-9]?(_[0-9]+)+`)
 var riotVerified map[riotVerifyKey]string
 var riotRegions = map[string]region.Region{
 	"na":   region.NA1,

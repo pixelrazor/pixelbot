@@ -12,6 +12,18 @@ import (
 )
 
 var embedColor = 0xb10fc6
+var emojis = map[int]string{
+	1:  "1⃣",
+	2:  "2⃣",
+	3:  "3⃣",
+	4:  "4⃣",
+	5:  "5⃣",
+	6:  "6⃣",
+	7:  "7⃣",
+	8:  "8⃣",
+	9:  "9⃣",
+	10: "🔟",
+}
 
 // Parse commadns from the user
 func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -23,7 +35,7 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	case "help":
 		var msg discordgo.MessageEmbed
 		msg.Title = "__**Pixel Bot Commands**__"
-		msg.Description = "All commands can be called by doing '/command arguments' or by pinging me anywhere in it (ex: 'help @pixelbot' or '@pixelbot help')"
+		msg.Description = "All commands can be called by prepending a '/' or by pinging me anywhere in it (ex: 'help @pixelbot' or '@pixelbot help')"
 		msg.Fields = make([]*discordgo.MessageEmbedField, 2)
 		msg.Footer = new(discordgo.MessageEmbedFooter)
 		msg.Footer.Text = m.Author.Username
@@ -105,7 +117,38 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 		s.ChannelMessageSendComplex(m.ChannelID, &mesg)
 		s.ChannelMessageDelete(m.ChannelID, waitMesg.ID)
 	case "match":
-		s.ChannelMessageSend(m.ChannelID, "WIP, try again later please")
+		card, name, numPlayers, err := riotMakeInGame(playerName, region)
+		if err != nil {
+			logger.Println("league match error:", err)
+			s.ChannelMessageSend(m.ChannelID, "Summoner not found/not in game")
+			return
+		}
+		var buffer bytes.Buffer
+		png.Encode(&buffer, card)
+		cardFile := discordgo.File{
+			Name:   name,
+			Reader: &buffer,
+		}
+		var embed discordgo.MessageEmbed
+		embed.Title = "League In-game"
+		embed.Image = new(discordgo.MessageEmbedImage)
+		embed.Image.URL = "attachment://" + name
+		embed.Footer = new(discordgo.MessageEmbedFooter)
+		embed.Footer.Text = m.Author.Username
+		if m.Author.Avatar == "" {
+			embed.Footer.IconURL = "https://discordapp.com/assets/dd4dbc0016779df1378e7812eabaa04d.png"
+		} else {
+			embed.Footer.IconURL = m.Author.AvatarURL("32")
+		}
+		embed.Color = embedColor
+		mesg := discordgo.MessageSend{
+			Embed: &embed,
+			Files: []*discordgo.File{&cardFile},
+		}
+		message, _ := s.ChannelMessageSendComplex(m.ChannelID, &mesg)
+		for i := 1; i <= numPlayers; i++ {
+			s.MessageReactionAdd(m.ChannelID, message.ID, emojis[i])
+		}
 	case "verify":
 		code, err := riotVerify(playerName, m.Author.ID, region)
 		if err != nil {

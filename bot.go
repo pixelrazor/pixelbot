@@ -2,13 +2,18 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"image/png"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/yuhanfang/riot/constants/region"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -50,8 +55,9 @@ func main() {
 	}
 	// Event handler for when a message is posted on any channel
 	discord.AddHandler(messageCreate)
+	discord.AddHandler(messageReactAdd)
 	if err = discord.Open(); err != nil {
-		fmt.Println("Error adding event handler", err)
+		fmt.Println("Error opening discord", err)
 		return
 	}
 	// Initialize the riot API stuff
@@ -75,6 +81,64 @@ func main() {
 	discord.Close()
 }
 
+func messageReactAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
+	if s.State.User.ID == m.MessageReaction.UserID {
+		return
+	}
+	mesg, err := s.ChannelMessage(m.ChannelID, m.MessageID)
+	if err != nil {
+		logger.Println("Error getting message in messageReactAdd:", err)
+	}
+	if mesg.Author.ID != s.State.User.ID {
+		return
+	}
+	if len(mesg.Embeds) > 0 && mesg.Embeds[0].Title == "League In-game" {
+		players := strings.Split(riotInGameFile.FindString(mesg.Embeds[0].Image.URL), "_")
+		for k, v := range emojis {
+			if v == m.MessageReaction.Emoji.Name {
+				if k < len(players) {
+					sid, err := strconv.ParseInt(players[k], 10, 64)
+					if err != nil {
+						logger.Println("messageReactAdd parseint:", err)
+						return
+					}
+					summoner, err := riotClient.GetBySummonerID(ctx, region.Region(players[0]), sid)
+					if err != nil {
+						logger.Println("messageReactAdd summoner by id:", err)
+						return
+					}
+					waitMesg, err := s.ChannelMessageSend(m.ChannelID, "Working on it...")
+					if err != nil {
+						logger.Println("messageReactAdd wait message send:", err)
+						return
+					}
+					playercard, err := riotPlayerCard(&summoner.Name, region.Region(players[0]))
+					if err != nil {
+						s.ChannelMessageEdit(m.ChannelID, waitMesg.ID, err.Error())
+						return
+					}
+					var buffer bytes.Buffer
+					png.Encode(&buffer, playercard)
+					cardFile := discordgo.File{
+						Name:   "playercard.png",
+						Reader: &buffer,
+					}
+					var embed discordgo.MessageEmbed
+					embed.Title = "__**" + summoner.Name + "**__"
+					embed.Image = new(discordgo.MessageEmbedImage)
+					embed.Image.URL = "attachment://playercard.png"
+					embed.Color = embedColor
+					mesg := discordgo.MessageSend{
+						Embed: &embed,
+						Files: []*discordgo.File{&cardFile},
+					}
+					s.ChannelMessageSendComplex(m.ChannelID, &mesg)
+					s.ChannelMessageDelete(m.ChannelID, waitMesg.ID)
+				}
+			}
+		}
+	}
+}
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Ignore all messages made by the bot
 	if m.Author.ID == s.State.User.ID {
