@@ -8,17 +8,17 @@ If you'd like to have Pixel Bot in your server, just visit [this](https://discor
 
 # Commands
 Commands can be in one of two formats
-> \/command arguments
+> \/\<command\> \<arguments\>
 
 or
-> @pixelbot commands arguments
+> @pixelbot \<command\> \<argument\>
 
-In the second format, the mention can be added __anywhere__ in the message (**command @pixelbot args**)
+In the second format, the mention can be added __anywhere__ in the message (**\<command\> @pixelbot \<args\>**)
 # Features
 - [League of Legends](#league)
     - [x] [Playercards](#lcard)
-    - [ ] [In-game cards](#lingame)
-- [Fornite](#fortnite)
+    - [x] [In-game cards](#lingame)
+- [Fortnite](#fortnite)
     - [ ] [Something with player stats?](#fstats)
 - [Dota 2](#dota2)
 - [Heroes of The Storm](#hots)
@@ -26,7 +26,7 @@ In the second format, the mention can be added __anywhere__ in the message (**co
 - [Overwatch](#owatch)
 - [CS:GO](csgo)
 # League of Legends<a name='league'></a>
-The league commands can be view via the **\/league help** command. The list of supported regions is na, br, eune, euw, jp, kr, lan, las, oce, tr, and ru.
+The league commands can be view via the **\/league help** command. The supported regions are na, br, eune, euw, jp, kr, lan, las, oce, tr, and ru.
 ## League Playercards<a name='lcard'></a>
 Playercards can be created using the following command:
 >\/league \<reigion\> player \<summoner\>
@@ -37,14 +37,19 @@ A custom quote can be added to the card via the verify and setquote league comma
 
 Here's a sample playercard the the bot generated:
 
-![example playercard](out.png)
+![example playercard](leaguePlayercard.png)
 
 ## In-game cards <a name="lingame"></a>
-Up next on the todo list!
+You can pull up an image showing the teams of the current match for the specified summoner. Reacts will be added, and each one corresponds to a player from that match. Clicking a react will generate the playercard for the corresponding player:
+>\/league \<reigion\> match \<summoner\>
+
+Here's an example of what this looks like:
+
+![example in-game card](leagueingame.png)
 # Fornite<a name="fortnite"></a>
 Under construction
 ## Something with player stats?<a name="fstats"></a>
-Under construction
+Under construction. Probably up next
 # Dota 2<a name="dota2"></a>
 Under construction
 # Heroes of The Storm<a name="hots"></a>

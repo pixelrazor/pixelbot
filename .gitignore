@@ -37,3 +37,4 @@ riottest\.go
 *.sh
 
 logs/
+pixelbot

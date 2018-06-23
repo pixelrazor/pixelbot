@@ -83,7 +83,7 @@ func riotInit() error {
 	go func() {
 		for true {
 			var patches []string
-			<-time.After(12 * time.Hour)
+			<-time.After(time.Hour)
 			res, err := http.Get("https://ddragon.leagueoflegends.com/api/versions.json")
 			if err != nil {
 				continue
@@ -245,53 +245,59 @@ func riotAddQuote(quote string, tdata map[string]textData, c *freetype.Context) 
 func riotMakeInGame(playername string, region region.Region) (*image.RGBA, string, int, error) {
 	summoner, err := riotClient.GetBySummonerName(ctx, region, playername)
 	if err != nil {
-		return nil, "",0, errors.New("Summoner not found: " + err.Error())
+		return nil, "", 0, errors.New("Summoner not found: " + err.Error())
 	}
 	info, err := riotClient.GetCurrentGameInfoBySummoner(ctx, region, summoner.ID)
 	if err != nil {
-		return nil, "",0, errors.New("Summoner not in game: " + err.Error())
+		return nil, "", 0, errors.New("Summoner not in game: " + err.Error())
 	}
 	fontFile, err := ioutil.ReadFile("league/FrizQuadrataTT.TTF")
 	if err != nil {
-		return nil, "",0, errors.New("Error opening font: " + err.Error())
+		return nil, "", 0, errors.New("Error opening font: " + err.Error())
 	}
 	f, err := freetype.ParseFont(fontFile)
 	if err != nil {
-		return nil, "",0, errors.New("Error parsing font: " + err.Error())
+		return nil, "", 0, errors.New("Error parsing font: " + err.Error())
 	}
 	names := make([]int64, len(info.Participants))
-	blue := 1
-	red := 1
+	blue := 0
 	left := make(chan riotInGameCH)
 	right := make(chan riotInGameCH)
 	defer close(left)
 	defer close(right)
+	participants := make([]apiclient.CurrentGameParticipant, 0)
 	for _, v := range info.Participants {
 		if v.TeamId == 100 {
-			go riotMakeParticipant(left, f, v, blue)
-			names[blue-1] = v.SummonerId
+			participants = append([]apiclient.CurrentGameParticipant{v}, participants...)
 			blue++
 		} else {
-			go riotMakeParticipant(right, f, v, 5+red)
-			names[len(info.Participants)/2+red-1] = v.SummonerId
-			red++
+			participants = append(participants, v)
+
 		}
 	}
+	for i, v := range info.Participants {
+		if v.TeamId == 100 {
+			go riotMakeParticipant(left, f, v, i+1)
+		} else {
+			go riotMakeParticipant(right, f, v, i+1)
+		}
+		names[i] = v.SummonerId
+	}
 	var ingame *image.RGBA
-	if red > blue {
-		ingame = image.NewRGBA(image.Rect(0, 0, 700, (red-1)*64))
+	if len(info.Participants)-blue > blue {
+		ingame = image.NewRGBA(image.Rect(0, 0, 700, (len(info.Participants)-blue)*64))
 	} else {
-		ingame = image.NewRGBA(image.Rect(0, 0, 700, (blue-1)*64))
+		ingame = image.NewRGBA(image.Rect(0, 0, 700, (blue)*64))
 	}
 	bg := loadImage("league/ingame.png")
 	draw.Draw(ingame, ingame.Bounds(), bg, image.ZP, draw.Src)
-	for i := 0; i < blue-1; i++ {
+	for i := 0; i < blue; i++ {
 		player := <-left
 		draw.Draw(ingame, player.card.Bounds().Add(image.Pt(0, 64*(player.num-1))), player.card, image.ZP, draw.Over)
 	}
-	for i := 0; i < red-1; i++ {
+	for i := 0; i < len(info.Participants)-blue; i++ {
 		player := <-right
-		draw.Draw(ingame, player.card.Bounds().Add(image.Pt(366, 64*((player.num-1)%(red-1)))), player.card, image.ZP, draw.Over)
+		draw.Draw(ingame, player.card.Bounds().Add(image.Pt(366, 64*(player.num-1-blue))), player.card, image.ZP, draw.Over)
 	}
 	/*file, _ := os.Create("test.png")
 	defer file.Close()
@@ -301,7 +307,7 @@ func riotMakeInGame(playername string, region region.Region) (*image.RGBA, strin
 		filename += fmt.Sprintf("_%v", v)
 	}
 	filename += ".png"
-	return ingame, filename,len(info.Participants), nil
+	return ingame, filename, len(info.Participants), nil
 }
 func riotMakeParticipant(done chan riotInGameCH, font *truetype.Font, player apiclient.CurrentGameParticipant, num int) {
 	styles := [][]image.Point{
@@ -407,7 +413,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 		return nil, errors.New("Unknown issue, try again later")
 	}
 	sleagues := result.value.([]apiclient.LeaguePosition)
-	var soloInfo, flexInfo apiclient.LeaguePosition
+	var soloInfo, flexInfo, highestRank apiclient.LeaguePosition
 	for _, v := range sleagues {
 		if v.QueueType == "RANKED_FLEX_SR" || v.QueueType == "RANKED_FLEX_TT" {
 			if riotRanks[v.Tier] > riotRanks[flexInfo.Tier] {
@@ -416,6 +422,11 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 		} else if v.QueueType == "RANKED_SOLO_5x5" {
 			soloInfo = v
 		}
+	}
+	if riotRanks[flexInfo.Tier] > riotRanks[soloInfo.Tier] {
+		highestRank = flexInfo
+	} else {
+		highestRank = soloInfo
 	}
 	result = <-matchesChan
 	if result.err != nil {
@@ -427,7 +438,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	defer close(imagesChan)
 	go func() {
 		imagesChan <- loadImage(fmt.Sprintf("league/profileicon/%v.png", sinfo.ProfileIconID))
-		imagesChan <- loadImage(fmt.Sprintf("league/insignia/%sinsignia.png", strings.ToLower(string(soloInfo.Tier))))
+		imagesChan <- loadImage(fmt.Sprintf("league/insignia/%sinsignia.png", strings.ToLower(string(highestRank.Tier))))
 		imagesChan <- loadImage(fmt.Sprintf("league/rank/%s_%s.png", soloInfo.Tier, soloInfo.Rank))
 		imagesChan <- loadImage(fmt.Sprintf("league/rank/%s_%s.png", flexInfo.Tier, flexInfo.Rank))
 		if len(schamps) > 0 {
@@ -441,7 +452,11 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 		champ champion.Champion
 		n     int
 	}
+	roles := make(map[string]int)
+	lanes := make(map[lane.Lane]int)
 	for _, v := range smatches.Matches {
+		roles[v.Role]++
+		lanes[v.Lane]++
 		switch {
 		case v.Role == "DUO_SUPPORT":
 			roleMatches["Support"]++
@@ -525,7 +540,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	draw.Draw(back, cardFront.images["background"].area, cardFront.images["background"].image, cardFront.images["background"].point, draw.Over)
 	delete(cardFront.images, "background")
 	imageInfo = cardFront.images["border"]
-	imageInfo.image = loadImage(fmt.Sprintf("league/rank_border/%sborder.png", strings.ToLower(string(soloInfo.Tier))))
+	imageInfo.image = loadImage(fmt.Sprintf("league/rank_border/%sborder.png", strings.ToLower(string(highestRank.Tier))))
 	cardFront.images["border"] = imageInfo
 	cardBack.images["border"] = imageInfo
 	imageInfo = cardFront.images["profileIcon"]

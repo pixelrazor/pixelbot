@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image/png"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/yuhanfang/riot/constants/region"
 
@@ -24,6 +26,7 @@ var emojis = map[int]string{
 	9:  "9⃣",
 	10: "🔟",
 }
+var uptime = time.Now()
 
 // Parse commadns from the user
 func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -36,7 +39,7 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		var msg discordgo.MessageEmbed
 		msg.Title = "__**Pixel Bot Commands**__"
 		msg.Description = "All commands can be called by prepending a '/' or by pinging me anywhere in it (ex: 'help @pixelbot' or '@pixelbot help')"
-		msg.Fields = make([]*discordgo.MessageEmbedField, 2)
+		msg.Fields = make([]*discordgo.MessageEmbedField, 5)
 		msg.Footer = new(discordgo.MessageEmbedFooter)
 		msg.Footer.Text = m.Author.Username
 		if m.Author.Avatar == "" {
@@ -46,10 +49,19 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 		msg.Fields[0] = new(discordgo.MessageEmbedField)
 		msg.Fields[1] = new(discordgo.MessageEmbedField)
-		msg.Fields[0].Name = "help"
-		msg.Fields[0].Value = "View this"
-		msg.Fields[1].Name = "league help"
-		msg.Fields[1].Value = "View the league commands"
+		msg.Fields[2] = new(discordgo.MessageEmbedField)
+		msg.Fields[3] = new(discordgo.MessageEmbedField)
+		msg.Fields[4] = new(discordgo.MessageEmbedField)
+		msg.Fields[0].Name = "about"
+		msg.Fields[0].Value = "View information about Pixel Bot and the developer"
+		msg.Fields[1].Name = "help"
+		msg.Fields[1].Value = "View this"
+		msg.Fields[2].Name = "league help"
+		msg.Fields[2].Value = "View the league commands"
+		msg.Fields[3].Name = "stats"
+		msg.Fields[3].Value = "View some stats about Pixel Bot"
+		msg.Fields[4].Name = "uptime"
+		msg.Fields[4].Value = "View how long Pixel Bot has been online for"
 		msg.Color = embedColor
 		s.ChannelMessageSendEmbed(m.ChannelID, &msg)
 	case "league":
@@ -59,6 +71,53 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, "Not enough arguments, try the 'league help' command.")
 			return
 		}
+	case "uptime":
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot has been online for %v", time.Now().Sub(uptime)))
+	case "stats":
+		users := 0
+		for _, v := range s.State.Guilds {
+			users += v.MemberCount
+		}
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot is currently on %v servers with a reach of %v people!", len(s.State.Guilds), users))
+	case "about":
+		var msg discordgo.MessageEmbed
+		file, err := os.Open("Avatar.png")
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, "An unknown error occured")
+			return
+		}
+		defer file.Close()
+		msg.Title = "__**About Pixel Bot**__"
+		msg.Description = "Pixel Bot is an open source project created by Austin Pohlmann (Pixel Razor)"
+		msg.Thumbnail = new(discordgo.MessageEmbedThumbnail)
+		msg.Thumbnail.URL = "attachment://Avatar.png"
+		msg.Fields = make([]*discordgo.MessageEmbedField, 3)
+		msg.Footer = new(discordgo.MessageEmbedFooter)
+		msg.Footer.Text = m.Author.Username
+		if m.Author.Avatar == "" {
+			msg.Footer.IconURL = "https://discordapp.com/assets/dd4dbc0016779df1378e7812eabaa04d.png"
+		} else {
+			msg.Footer.IconURL = m.Author.AvatarURL("32")
+		}
+		msg.Fields[0] = new(discordgo.MessageEmbedField)
+		msg.Fields[1] = new(discordgo.MessageEmbedField)
+		msg.Fields[2] = new(discordgo.MessageEmbedField)
+		msg.Fields[0].Name = "Source Code"
+		msg.Fields[0].Value = "All source code is in the GitHub repository, found [here](https://github.com/pixelrazor/pixelbot)."
+		msg.Fields[1].Name = "Support Me"
+		msg.Fields[1].Value = "If you like Pixel Bot or what I do, please consider supporting me by [buying me a coffee](https://www.buymeacoffee.com/iZ1Dhem)."
+		msg.Fields[2].Name = "Suggestions"
+		msg.Fields[2].Value = "If you have any questions/comments/suggestions/concerns, or if you find that the bot is offline for some reason, please contact me at pixelrazor@gmail.com"
+		msg.Color = embedColor
+		thumb := discordgo.File{
+			Name:   "Avatar.png",
+			Reader: file,
+		}
+		finalMesg := discordgo.MessageSend{
+			Embed: &msg,
+			Files: []*discordgo.File{&thumb},
+		}
+		s.ChannelMessageSendComplex(m.ChannelID, &finalMesg)
 	default:
 		s.ChannelMessageSend(m.ChannelID, "Command not found, try the 'help' command.")
 	}
@@ -141,6 +200,7 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 			embed.Footer.IconURL = m.Author.AvatarURL("32")
 		}
 		embed.Color = embedColor
+		embed.Description = "Click the numbered reactions to pull up the playercard of the corresponding player"
 		mesg := discordgo.MessageSend{
 			Embed: &embed,
 			Files: []*discordgo.File{&cardFile},

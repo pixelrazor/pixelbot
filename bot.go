@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image/png"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 )
 
 var logger *log.Logger
+var botStatuses = []string{"Thug N@$ty", "A Sense of Pride and Accomplishment", "Your Mom", "Battletoads", "Never Gonna Give You Up", "Open Mid", "ur mom gay"}
 
 func main() {
 	os.Mkdir("logs", os.ModeDir)
@@ -60,6 +62,7 @@ func main() {
 		fmt.Println("Error opening discord", err)
 		return
 	}
+	go randomStatus(discord)
 	// Initialize the riot API stuff
 	if err = riotInit(); err != nil {
 		fmt.Println("Error during riotInit():", err)
@@ -79,6 +82,14 @@ func main() {
 		fmt.Println("Quit from console")
 	}
 	discord.Close()
+}
+
+func randomStatus(disc *discordgo.Session) {
+	for {
+		n := rand.Intn(len(botStatuses))
+		disc.UpdateStatus(0, botStatuses[n])
+		<-time.After(time.Hour)
+	}
 }
 
 func messageReactAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
