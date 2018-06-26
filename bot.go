@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"image/png"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,8 +21,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var logger *log.Logger
-var botStatuses = []string{"Thug N@$ty", "A Sense of Pride and Accomplishment", "Your Mom", "Battletoads", "Never Gonna Give You Up", "Open Mid", "ur mom gay"}
+var (
+	logger                    *log.Logger
+	botStatuses               = []string{"Thug N@$ty", "A Sense of Pride and Accomplishment", "Your Mom", "Battletoads", "Never Gonna Give You Up", "Open Mid", "ur mom gay"}
+	servers                   map[string]bool
+	commandsRun               uint64
+	commandsLock, serversLock sync.Mutex
+	//dmchannel                 = "460949603496230914" // test bot
+	dmchannel = "404261686057631748" // real bot
+)
 
 func main() {
 	os.Mkdir("logs", os.ModeDir)
@@ -58,6 +67,13 @@ func main() {
 	// Event handler for when a message is posted on any channel
 	discord.AddHandler(messageCreate)
 	discord.AddHandler(messageReactAdd)
+	discord.AddHandler(serverJoin)
+	discord.AddHandler(serverLeave)
+	err = botInit()
+	if err != nil {
+		fmt.Println("Error in botinit:", err)
+		return
+	}
 	if err = discord.Open(); err != nil {
 		fmt.Println("Error opening discord", err)
 		return
@@ -84,6 +100,75 @@ func main() {
 	discord.Close()
 }
 
+func botInit() error {
+	{
+		f, err := os.Open("servers.txt")
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		servers = make(map[string]bool)
+		scan := bufio.NewScanner(f)
+		for scan.Scan() {
+			servers[scan.Text()] = true
+		}
+	}
+	f, err := os.Open("commands.bytes")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	read := bufio.NewScanner(f)
+	if read.Scan() {
+		number := read.Bytes()
+		commandsRun = binary.BigEndian.Uint64(number)
+	} else {
+		commandsRun = 1559
+	}
+	return nil
+}
+func serverJoin(s *discordgo.Session, m *discordgo.GuildCreate) {
+	if !servers[m.ID] {
+		serversLock.Lock()
+		defer serversLock.Unlock()
+		servers[m.ID] = true
+		f, err := os.OpenFile("servers.txt", os.O_APPEND|os.O_WRONLY, 0666)
+		if err != nil {
+			fmt.Println("strange issue tring to open servers.txt:", err)
+		}
+		f.WriteString(m.ID + "\n")
+		s.ChannelMessageSend(dmchannel, "I joined "+m.Name+fmt.Sprintf(" (%v members)", m.MemberCount))
+	}
+}
+func serverLeave(s *discordgo.Session, m *discordgo.GuildDelete) {
+	serversLock.Lock()
+	defer serversLock.Unlock()
+	delete(servers, m.ID)
+	f, err := os.Create("servers.txt")
+	if err != nil {
+		fmt.Println("error opening servers.txt to remove someone")
+		return
+	}
+	defer f.Close()
+	for k, v := range servers {
+		if v {
+			f.WriteString(k + "\n")
+		}
+	}
+	s.ChannelMessageSend(dmchannel, "I was removed from "+m.Name+fmt.Sprintf(" (%v members)", m.MemberCount))
+}
+func incrementCommandsRun() {
+	commandsLock.Lock()
+	defer commandsLock.Unlock()
+	commandsRun++
+	f, err := os.Create("commands.bytes")
+	if err != nil {
+		return
+	}
+	cmdBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(cmdBytes, commandsRun)
+	f.Write(cmdBytes)
+}
 func randomStatus(disc *discordgo.Session) {
 	for {
 		n := rand.Intn(len(botStatuses))
@@ -99,6 +184,7 @@ func messageReactAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 	mesg, err := s.ChannelMessage(m.ChannelID, m.MessageID)
 	if err != nil {
 		logger.Println("Error getting message in messageReactAdd:", err)
+		return
 	}
 	if mesg.Author.ID != s.State.User.ID {
 		return
@@ -123,6 +209,7 @@ func messageReactAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 						logger.Println("messageReactAdd wait message send:", err)
 						return
 					}
+					go incrementCommandsRun()
 					playercard, err := riotPlayerCard(&summoner.Name, region.Region(players[0]))
 					if err != nil {
 						s.ChannelMessageEdit(m.ChannelID, waitMesg.ID, err.Error())
@@ -159,6 +246,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if len(message) > 0 && len(message[0]) > 2 && message[0][0] == '/' {
 		message[0] = message[0][1:]
 		parse(message, s, m)
+		return
 	}
 	for _, v := range m.Mentions {
 		if v.ID == s.State.User.ID {
@@ -166,6 +254,10 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			variant := strings.Replace(v.Mention(), "@", "@!", 1)
 			pass2 := strings.Replace(pass1, variant, "", -1)
 			parse(strings.Fields(pass2), s, m)
+			return
 		}
+	}
+	if m.ChannelID == dmchannel {
+		consoleCmd(strings.Fields(m.Content), s, nil, true)
 	}
 }

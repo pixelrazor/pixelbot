@@ -81,9 +81,12 @@ func riotInit() error {
 	res.Body.Close()
 	riotChamps = ddchamps.toMap()
 	go func() {
+		ddragon.GetChamps(patches[0])
+		ddragon.GetIcons(patches[0])
+		ddragon.GetRunes(patches[0])
+		ddragon.GetSumms(patches[0])
 		for true {
 			var patches []string
-			<-time.After(time.Hour)
 			res, err := http.Get("https://ddragon.leagueoflegends.com/api/versions.json")
 			if err != nil {
 				continue
@@ -100,13 +103,10 @@ func riotInit() error {
 				json.Unmarshal(asd, ddchamps)
 				res.Body.Close()
 				riotChamps = ddchamps.toMap()
-				ddragon.GetChamps(patches[0])
-				ddragon.GetIcons(patches[0])
-				ddragon.GetRunes(patches[0])
-				ddragon.GetSumms(patches[0])
 			}
 			riotPatch = patches[0]
 			res.Body.Close()
+			<-time.After(time.Hour)
 		}
 	}()
 	return nil

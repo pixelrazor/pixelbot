@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/png"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +31,7 @@ var uptime = time.Now()
 
 // Parse commadns from the user
 func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
+	go incrementCommandsRun()
 	if len(args) == 0 {
 		s.ChannelMessageSend(m.ChannelID, m.Author.Mention()+" Stop pinging me for no reason, punk")
 		return
@@ -39,7 +41,7 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		var msg discordgo.MessageEmbed
 		msg.Title = "__**Pixel Bot Commands**__"
 		msg.Description = "All commands can be called by prepending a '/' or by pinging me anywhere in it (ex: 'help @pixelbot' or '@pixelbot help')"
-		msg.Fields = make([]*discordgo.MessageEmbedField, 5)
+		msg.Fields = make([]*discordgo.MessageEmbedField, 6)
 		msg.Footer = new(discordgo.MessageEmbedFooter)
 		msg.Footer.Text = m.Author.Username
 		if m.Author.Avatar == "" {
@@ -52,16 +54,19 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		msg.Fields[2] = new(discordgo.MessageEmbedField)
 		msg.Fields[3] = new(discordgo.MessageEmbedField)
 		msg.Fields[4] = new(discordgo.MessageEmbedField)
+		msg.Fields[5] = new(discordgo.MessageEmbedField)
 		msg.Fields[0].Name = "about"
 		msg.Fields[0].Value = "View information about Pixel Bot and the developer"
-		msg.Fields[1].Name = "help"
-		msg.Fields[1].Value = "View this"
-		msg.Fields[2].Name = "league help"
-		msg.Fields[2].Value = "View the league commands"
-		msg.Fields[3].Name = "stats"
-		msg.Fields[3].Value = "View some stats about Pixel Bot"
-		msg.Fields[4].Name = "uptime"
-		msg.Fields[4].Value = "View how long Pixel Bot has been online for"
+		msg.Fields[1].Name = "feedback <message>"
+		msg.Fields[1].Value = "Have any questions, comments, or suggestions? Use this to have Pixel Bot inform me of what you have to say!"
+		msg.Fields[2].Name = "help"
+		msg.Fields[2].Value = "View this"
+		msg.Fields[3].Name = "league help"
+		msg.Fields[3].Value = "View the league commands"
+		msg.Fields[4].Name = "stats"
+		msg.Fields[4].Value = "View some stats about Pixel Bot"
+		msg.Fields[5].Name = "uptime"
+		msg.Fields[5].Value = "View how long Pixel Bot has been online for"
 		msg.Color = embedColor
 		s.ChannelMessageSendEmbed(m.ChannelID, &msg)
 	case "league":
@@ -78,7 +83,7 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		for _, v := range s.State.Guilds {
 			users += v.MemberCount
 		}
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot is currently on %v servers with a reach of %v people!", len(s.State.Guilds), users))
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot is currently on %v servers with a reach of %v people! %v commands have been run so far.", commafy(strconv.Itoa(len(s.State.Guilds))), commafy(strconv.Itoa(users)), commafy(strconv.FormatUint(commandsRun, 10))))
 	case "about":
 		var msg discordgo.MessageEmbed
 		file, err := os.Open("Avatar.png")
@@ -107,7 +112,7 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		msg.Fields[1].Name = "Support Me"
 		msg.Fields[1].Value = "If you like Pixel Bot or what I do, please consider supporting me by [buying me a coffee](https://www.buymeacoffee.com/iZ1Dhem)."
 		msg.Fields[2].Name = "Suggestions"
-		msg.Fields[2].Value = "If you have any questions/comments/suggestions/concerns, or if you find that the bot is offline for some reason, please contact me at pixelrazor@gmail.com"
+		msg.Fields[2].Value = "If you have any questions/comments/suggestions/concerns, or if you find that the bot is offline for some reason, please use the '/feedback' command or contact me at pixelrazor@gmail.com"
 		msg.Color = embedColor
 		thumb := discordgo.File{
 			Name:   "Avatar.png",
@@ -118,6 +123,8 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 			Files: []*discordgo.File{&thumb},
 		}
 		s.ChannelMessageSendComplex(m.ChannelID, &finalMesg)
+	case "feedback":
+		s.ChannelMessageSend(dmchannel, m.ChannelID+" "+m.Author.Mention()+": "+recombineArgs(args[1:]))
 	default:
 		s.ChannelMessageSend(m.ChannelID, "Command not found, try the 'help' command.")
 	}

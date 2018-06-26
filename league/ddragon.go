@@ -42,7 +42,7 @@ func GetChamps(patch string) {
 	champs := rawchamps.toMap()
 	os.Mkdir("league/champion", os.ModeDir)
 	for k, v := range champs {
-		if _, err := os.Stat(fmt.Sprintf("league/champion/%v.png", k)); os.IsExist(err) {
+		if _, err := os.Stat(fmt.Sprintf("league/champion/%v.png", k)); err == nil {
 			continue
 		}
 		res, err := http.Get("http://ddragon.leagueoflegends.com/cdn/" + patch + "/img/champion/" + v + ".png")
@@ -76,7 +76,7 @@ func GetSumms(patch string) {
 	summs := rawsumms.toMap()
 	os.Mkdir("league/summoners", os.ModeDir)
 	for k, v := range summs {
-		if _, err := os.Stat(fmt.Sprintf("league/summoners/%v.png", k)); os.IsExist(err) {
+		if _, err := os.Stat(fmt.Sprintf("league/summoners/%v.png", k)); err == nil {
 			continue
 		}
 		res, err := http.Get("http://ddragon.leagueoflegends.com/cdn/" + patch + "/img/spell/" + v + ".png")
@@ -109,7 +109,7 @@ func GetIcons(patch string) {
 	res.Body.Close()
 	os.Mkdir("league/profileicon", os.ModeDir)
 	for k := range icons.Data {
-		if _, err := os.Stat(fmt.Sprintf("league/profileicon/%v.png", k)); os.IsExist(err) {
+		if _, err := os.Stat(fmt.Sprintf("league/profileicon/%v.png", k)); err == nil {
 			continue
 		}
 		res, err := http.Get("http://ddragon.leagueoflegends.com/cdn/" + patch + "/img/profileicon/" + k + ".png")
