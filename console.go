@@ -2,9 +2,12 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/boltdb/bolt"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -33,21 +36,22 @@ func consoleCmd(cmd []string, discord *discordgo.Session, quit chan struct{}, dm
 	}
 	switch strings.ToLower(cmd[0]) {
 	case "servers":
-		consolePrint(discord, dm, "|-----------------------+----------|")
-		consolePrint(discord, dm, fmt.Sprintf("| %-20v  |  %7v |", "Server", "Members"))
-		consolePrint(discord, dm, "|-----------------------+----------|")
+		message := "|-----------------------+----------|\n"
+		message += fmt.Sprintf("| %-20v  |  %7v |\n", "Server", "Members")
+		message += "|-----------------------+----------|\n"
 		i := 0
 		for _, v := range discord.State.Guilds {
-			consolePrint(discord, dm, fmt.Sprintf("| %-20v  |  %7v |", v.Name, v.MemberCount))
+			message += fmt.Sprintf("| %-30v  |  %7v |\n", v.Name, v.MemberCount)
 			i += v.MemberCount
 		}
-		consolePrint(discord, dm, "|-----------------------+----------|")
-		consolePrint(discord, dm, fmt.Sprintf("| Total Users           | %8v |", i))
-		consolePrint(discord, dm, "|-----------------------+----------|")
+		message += "|-----------------------+----------|\n"
+		message += fmt.Sprintf("| Total Users           | %8v |\n", i)
+		message += "|-----------------------+----------|"
+		consolePrint(discord, dm, message)
 	case "riotkeys":
 		consolePrint(discord, dm, "Discord id, code")
 		for k, v := range riotVerified {
-			consolePrint(discord, dm, fmt.Sprint(k.dID, v))
+			consolePrint(discord, dm, fmt.Sprint(k.dID,", ", v))
 		}
 	case "message":
 		if len(cmd) >= 3 {
@@ -55,6 +59,20 @@ func consoleCmd(cmd []string, discord *discordgo.Session, quit chan struct{}, dm
 		} else {
 			consolePrint(discord, dm, "message <channel id> <message>")
 		}
+	case "quotes":
+		riotDB.View(func(t *bolt.Tx) error {
+			b := t.Bucket([]byte("quotes"))
+			if b == nil {
+				return errors.New("Error getting quotes bucket")
+			}
+			msg := ""
+			b.ForEach(func(k, v []byte) error {
+				msg += "Quote: " + string(v) + "\n"
+				return nil
+			})
+			consolePrint(discord, dm, msg)
+			return nil
+		})
 	case "quit":
 		if quit != nil {
 			fmt.Println("Quiting...")
@@ -68,7 +86,7 @@ func consoleCmd(cmd []string, discord *discordgo.Session, quit chan struct{}, dm
 }
 func consolePrint(discord *discordgo.Session, dm bool, mesg string) {
 	if dm {
-		discord.ChannelMessageSend(dmchannel, mesg)
+		discord.ChannelMessageSend(dmchannel, "```\n"+mesg+"```")
 	} else {
 		fmt.Println(mesg)
 	}

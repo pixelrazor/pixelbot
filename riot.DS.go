@@ -30,8 +30,9 @@ type errChan struct {
 	err   error
 }
 type riotVerifyKey struct {
-	dID string
-	sID int64
+	dID    string
+	sID    int64
+	region region.Region
 }
 type ddchamp struct {
 	ID  string

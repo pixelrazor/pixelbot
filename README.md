@@ -33,7 +33,7 @@ Playercards can be created using the following command:
 
 Where region is the corresponsing region (NA by default, see the league help menu for others)
 
-A custom quote can be added to the card via the verify and setquote league commands. Please see the league help menu for more details.
+A custom quote can be added to the card after verifying via the 'code' and 'verify' commands. Please see the league help menu for more details.
 
 Here's a sample playercard the the bot generated:
 

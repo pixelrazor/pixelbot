@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/yuhanfang/riot/constants/region"
+
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -15,6 +17,17 @@ type leagueMostChamps struct {
 	kda         string
 }
 
+func opggLink(region region.Region) string {
+	if region == "kr" {
+		return "http://op.gg/"
+	}
+	for k, v := range riotRegions {
+		if v == region {
+			return "http://" + k + ".op.gg/"
+		}
+	}
+	return "http://na.op.gg/"
+}
 func opggRankedChamps(summonerID, region string) []leagueMostChamps {
 	var champs []leagueMostChamps
 	var champ *leagueMostChamps

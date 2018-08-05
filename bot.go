@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"image/png"
 	"log"
-	"math/rand"
 	"os"
 	"os/signal"
 	"strconv"
@@ -23,7 +22,6 @@ import (
 
 var (
 	logger                    *log.Logger
-	botStatuses               = []string{"Thug N@$ty", "A Sense of Pride and Accomplishment", "Your Mom", "Battletoads", "Never Gonna Give You Up", "Open Mid", "ur mom gay"}
 	servers                   map[string]bool
 	commandsRun               uint64
 	commandsLock, serversLock sync.Mutex
@@ -64,7 +62,7 @@ func main() {
 		fmt.Println("Error making discordbot object:", err)
 		return
 	}
-	// Event handler for when a message is posted on any channel
+	// Event handlers
 	discord.AddHandler(messageCreate)
 	discord.AddHandler(messageReactAdd)
 	discord.AddHandler(serverJoin)
@@ -78,14 +76,13 @@ func main() {
 		fmt.Println("Error opening discord", err)
 		return
 	}
-	go randomStatus(discord)
 	// Initialize the riot API stuff
 	if err = riotInit(); err != nil {
 		fmt.Println("Error during riotInit():", err)
 		return
 	}
 	defer riotDB.Close()
-	// I need to change the to allow for administration commands from the prompt
+	discord.UpdateStatus(0, "/help or @Pixel Bot help")
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
 	consoleQuit := make(chan struct{})
 	go console(discord, consoleQuit)
@@ -122,8 +119,6 @@ func botInit() error {
 	if read.Scan() {
 		number := read.Bytes()
 		commandsRun = binary.BigEndian.Uint64(number)
-	} else {
-		commandsRun = 1559
 	}
 	return nil
 }
@@ -155,7 +150,7 @@ func serverLeave(s *discordgo.Session, m *discordgo.GuildDelete) {
 			f.WriteString(k + "\n")
 		}
 	}
-	s.ChannelMessageSend(dmchannel, "I was removed from "+m.Name+fmt.Sprintf(" (%v members)", m.MemberCount))
+	s.ChannelMessageSend(dmchannel, "I was removed from "+m.Name)
 }
 func incrementCommandsRun() {
 	commandsLock.Lock()
@@ -168,13 +163,6 @@ func incrementCommandsRun() {
 	cmdBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(cmdBytes, commandsRun)
 	f.Write(cmdBytes)
-}
-func randomStatus(disc *discordgo.Session) {
-	for {
-		n := rand.Intn(len(botStatuses))
-		disc.UpdateStatus(0, botStatuses[n])
-		<-time.After(time.Hour)
-	}
 }
 
 func messageReactAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
@@ -215,20 +203,22 @@ func messageReactAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 						s.ChannelMessageEdit(m.ChannelID, waitMesg.ID, err.Error())
 						return
 					}
-					var buffer bytes.Buffer
-					png.Encode(&buffer, playercard)
-					cardFile := discordgo.File{
-						Name:   "playercard.png",
-						Reader: &buffer,
-					}
-					var embed discordgo.MessageEmbed
-					embed.Title = "__**" + summoner.Name + "**__"
-					embed.Image = new(discordgo.MessageEmbedImage)
-					embed.Image.URL = "attachment://playercard.png"
-					embed.Color = embedColor
+					buffer := new(bytes.Buffer)
+					png.Encode(buffer, playercard)
 					mesg := discordgo.MessageSend{
-						Embed: &embed,
-						Files: []*discordgo.File{&cardFile},
+						Embed: &discordgo.MessageEmbed{
+							Title: "__**" + summoner.Name + "**__",
+							Color: embedColor,
+							Image: &discordgo.MessageEmbedImage{
+								URL: "attachment://playercard.png",
+							},
+						},
+						Files: []*discordgo.File{
+							&discordgo.File{
+								Name:   "playercard.png",
+								Reader: buffer,
+							},
+						},
 					}
 					s.ChannelMessageSendComplex(m.ChannelID, &mesg)
 					s.ChannelMessageDelete(m.ChannelID, waitMesg.ID)

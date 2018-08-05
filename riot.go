@@ -59,6 +59,11 @@ func riotInit() error {
 			fmt.Println("Error making quotes bucket")
 			return err
 		}
+		_, err = tx.CreateBucketIfNotExists([]byte("verify"))
+		if err != nil {
+			fmt.Println("Error making quotes bucket")
+			return err
+		}
 		return nil
 	})
 	riotClient = apiclient.New(riotKey, httpClient, limiter)
@@ -126,17 +131,47 @@ func riotVerify(playername, discordID string, region region.Region) (string, err
 	if err != nil {
 		return "", err
 	}
-	key := riotVerifyKey{discordID, summoner.ID}
+	key := riotVerifyKey{discordID, summoner.ID, region}
 	code := randString(13)
 	riotVerified[key] = code
 	go func() {
-		<-time.After(10 * time.Minute)
+		<-time.After(24 * time.Hour)
 		_, ok := riotVerified[key]
 		if ok {
 			delete(riotVerified, key)
 		}
 	}()
 	return code, nil
+}
+
+func riotCheckVerify(playername, discordID string, region region.Region) error {
+	summoner, err := riotClient.GetBySummonerName(ctx, region, playername)
+	if err != nil {
+		return errors.New("Error: could not locate that account")
+	}
+	code, ok := riotVerified[riotVerifyKey{discordID, summoner.ID, region}]
+	if !ok {
+		return errors.New("Error: You are not currently verified for this account")
+	}
+	pcode, err := riotClient.GetThirdPartyCodeByID(ctx, region, summoner.ID)
+	if err != nil {
+		return errors.New("Unknown error occured")
+	}
+	if pcode != code {
+		return errors.New("Error: your verification code does not match the summoner's")
+	}
+	err = riotDB.Update(func(tx *bolt.Tx) error {
+		verify := tx.Bucket([]byte("verify"))
+		if verify == nil {
+			return errors.New("Unknown database error occured")
+		}
+		err := verify.Put([]byte(fmt.Sprint("%v%v%v", discordID, summoner.AccountID, region)), []byte("1"))
+		if err != nil {
+			return errors.New("Unknown database error occured")
+		}
+		return nil
+	})
+	return err
 }
 
 func riotSetQuote(discordID, pname, quote string, region region.Region) error {
@@ -147,16 +182,18 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 	if err != nil {
 		return errors.New("Error: Could not find summoner " + pname)
 	}
-	code, ok := riotVerified[riotVerifyKey{discordID, summoner.ID}]
-	if !ok {
-		return errors.New("Error: You are not currently verified for this account")
-	}
-	pcode, err := riotClient.GetThirdPartyCodeByID(ctx, region, summoner.ID)
+	err = riotDB.View(func(tx *bolt.Tx) error {
+		verify := tx.Bucket([]byte("verify"))
+		if verify == nil {
+			return errors.New("Unknown database error occured")
+		}
+		if result := verify.Get([]byte(fmt.Sprint("%v%v%v", discordID, summoner.AccountID, region))); result != nil {
+			return nil
+		}
+		return errors.New("Error: You are not verified for this account")
+	})
 	if err != nil {
-		return errors.New("Unknown error occured")
-	}
-	if pcode != code {
-		return errors.New("Error: your verification code does not match the summoner's")
+		return err
 	}
 	err = riotDB.Update(func(tx *bolt.Tx) error {
 		quotes := tx.Bucket([]byte("quotes"))
@@ -181,13 +218,13 @@ func riotPastRanks(c *freetype.Context, username, region string) cardTemplate {
 	var seasons []int
 	res, err := http.Get("http://" + region + ".op.gg/summoner/userName=" + strings.Replace(username, " ", "+", -1))
 	if err != nil {
-		logger.Println("Error getting past ranks")
+		logger.Println("Error getting past ranks:", err)
 		return ranks
 	}
 	defer res.Body.Close()
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		logger.Println("Error getting past ranks")
+		logger.Println("Error getting past ranks:", err)
 		return ranks
 	}
 	doc.Find(".PastRankList li").Each(func(i int, s *goquery.Selection) {
@@ -515,7 +552,6 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	c.SetClip(front.Bounds())
 	c.SetSrc(image.White)
 	c.SetDst(front)
-	logger.Printf("Playercard: %v %v\n", region, *playername)
 	// Load the templates and fill in the missing info.
 	oldRanksChan := make(chan cardTemplate, 1)
 	defer close(oldRanksChan)
