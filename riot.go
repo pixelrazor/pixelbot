@@ -165,7 +165,7 @@ func riotCheckVerify(playername, discordID string, region region.Region) error {
 		if verify == nil {
 			return errors.New("Unknown database error occured")
 		}
-		err := verify.Put([]byte(fmt.Sprint("%v%v%v", discordID, summoner.AccountID, region)), []byte("1"))
+		err := verify.Put([]byte(fmt.Sprintf("%v%v%v", discordID, summoner.AccountID, region)), []byte("1"))
 		if err != nil {
 			return errors.New("Unknown database error occured")
 		}
@@ -187,7 +187,7 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 		if verify == nil {
 			return errors.New("Unknown database error occured")
 		}
-		if result := verify.Get([]byte(fmt.Sprint("%v%v%v", discordID, summoner.AccountID, region))); result != nil {
+		if result := verify.Get([]byte(fmt.Sprintf("%v%v%v", discordID, summoner.AccountID, region))); result != nil {
 			return nil
 		}
 		return errors.New("Error: You are not verified for this account")
@@ -200,7 +200,7 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 		if quotes == nil {
 			return errors.New("Unknown database error occured")
 		}
-		err := quotes.Put([]byte(fmt.Sprint("%v%v", summoner.AccountID, region)), []byte(quote))
+		err := quotes.Put([]byte(fmt.Sprintf("%v%v", summoner.AccountID, region)), []byte(quote))
 		if err != nil {
 			return errors.New("Unknown database error occured")
 		}
@@ -762,7 +762,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 			logger.Println("Error opening quote bucket")
 			return errors.New("Error opening bucket???")
 		}
-		v := b.Get([]byte(fmt.Sprint("%v%v", sinfo.AccountID, region)))
+		v := b.Get([]byte(fmt.Sprintf("%v%v", sinfo.AccountID, region)))
 		if v != nil {
 			riotAddQuote(string(v), cardBack.text, c)
 		}

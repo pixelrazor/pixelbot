@@ -45,6 +45,16 @@ func main() {
 		fmt.Println("Riot api key:", riotKey)
 	}
 	file.Close()
+	file, err = os.Open("osuapi.key")
+	if err != nil {
+		fmt.Println("Error opening Osu API key file:", err)
+		return
+	}
+	if scanner := bufio.NewScanner(file); scanner.Scan() {
+		osukey = scanner.Text()
+		fmt.Println("Osu api key:", osukey)
+	}
+	file.Close()
 	// Create the bot
 	file, err = os.Open("discordapi.key")
 	if err != nil {
@@ -67,6 +77,7 @@ func main() {
 	discord.AddHandler(messageReactAdd)
 	discord.AddHandler(serverJoin)
 	discord.AddHandler(serverLeave)
+	discord.AddHandler(onReady)
 	err = botInit()
 	if err != nil {
 		fmt.Println("Error in botinit:", err)
@@ -82,7 +93,6 @@ func main() {
 		return
 	}
 	defer riotDB.Close()
-	discord.UpdateStatus(0, "/help or @Pixel Bot help")
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
 	consoleQuit := make(chan struct{})
 	go console(discord, consoleQuit)
@@ -96,7 +106,9 @@ func main() {
 	}
 	discord.Close()
 }
-
+func onReady(s *discordgo.Session, r *discordgo.Ready) {
+	s.UpdateStatus(0, "/help or @Pixel Bot help")
+}
 func botInit() error {
 	{
 		f, err := os.Open("servers.txt")
@@ -115,11 +127,20 @@ func botInit() error {
 		return err
 	}
 	defer f.Close()
-	read := bufio.NewScanner(f)
-	if read.Scan() {
-		number := read.Bytes()
-		commandsRun = binary.BigEndian.Uint64(number)
-	}
+	number := make([]byte, 8)
+	f.Read(number)
+	commandsRun = binary.BigEndian.Uint64(number)
+	cmdHandlers["help"] = helpcmd
+	cmdHandlers["about"] = aboutcmd
+	cmdHandlers["uptime"] = uptimecmd
+	cmdHandlers["league"] = leaguecmd
+	cmdHandlers["osu"] = osucmd
+	cmdHandlers["stats"] = statscmd
+	cmdHandlers["feedback"] = feedbackcmd
+	cmdHandlers["uinfo"] = uinfocmd
+	cmdHandlers["cinfo"] = cinfocmd
+	cmdHandlers["sinfo"] = sinfocmd
+	cmdHandlers["ask"] = askcmd
 	return nil
 }
 func serverJoin(s *discordgo.Session, m *discordgo.GuildCreate) {
