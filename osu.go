@@ -210,7 +210,11 @@ func osuPlayercard(name string) (*image.RGBA, error) {
 	c.SetFontSize(32)
 	c.DrawString(user[0].Username, freetype.Pt(112, 60))
 	c.SetFontSize(24)
-	c.DrawString(commafy(user[0].Level[:strings.Index(user[0].Level, ".")]), freetype.Pt(182, 143))
+	if index := strings.Index(user[0].Level, "."); index != -1 {
+		c.DrawString(commafy(user[0].Level[:index]), freetype.Pt(182, 143))
+	} else {
+		c.DrawString(commafy(user[0].Level), freetype.Pt(182, 143))
+	}
 	c.DrawString(acc, freetype.Pt(182, 175))
 	c.DrawString(commafy(user[0].Playcount), freetype.Pt(182, 209))
 	c.DrawString(commafy(user[0].TotalScore), freetype.Pt(182, 247))

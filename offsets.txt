@@ -1,0 +1,3 @@
+trrim 4px from edges
+new size: 340px X 589px
+draw card at 10,17

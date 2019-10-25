@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
 	"image/draw"
-	"image/png"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -17,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pixelrazor/pixelbot/league"
+	ddragon "github.com/pixelrazor/pixelbot/league"
 
 	"github.com/boltdb/bolt"
 
@@ -155,6 +153,7 @@ func riotCheckVerify(playername, discordID string, region region.Region) error {
 	}
 	pcode, err := riotClient.GetThirdPartyCodeByID(ctx, region, summoner.ID)
 	if err != nil {
+		fmt.Println(err)
 		return errors.New("Unknown error occured")
 	}
 	if pcode != code {
@@ -296,7 +295,7 @@ func riotMakeInGame(playername string, region region.Region) (*image.RGBA, strin
 	if err != nil {
 		return nil, "", 0, errors.New("Error parsing font: " + err.Error())
 	}
-	names := make([]int64, len(info.Participants))
+	names := make([]string, len(info.Participants))
 	blue := 0
 	left := make(chan riotInGameCH)
 	right := make(chan riotInGameCH)
@@ -399,57 +398,24 @@ func riotMakeParticipant(done chan riotInGameCH, font *truetype.Font, player api
 func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, error) {
 	// Gather player data
 	//sinfo, sleagues, smatches := riotPlayerInfo(*playername, region)
-	masteryChan := make(chan errChan, 1)
-	leaguesChan := make(chan errChan, 1)
-	matchesChan := make(chan errChan, 1)
-	opggchampsChan := make(chan []leagueMostChamps, 1)
 	sinfo, err := riotClient.GetBySummonerName(ctx, region, *playername)
 	if err != nil {
 		return nil, errors.New("Couldn't find summoner '" + *playername + "'")
 	}
 	*playername = sinfo.Name
-	go func() {
-		stuff, err := riotClient.GetAllChampionMasteries(ctx, region, sinfo.ID)
-		masteryChan <- errChan{stuff, err}
-		close(masteryChan)
-	}()
-	go func() {
-		stuff, err := riotClient.GetAllLeaguePositionsForSummoner(ctx, region, sinfo.ID)
-		leaguesChan <- errChan{stuff, err}
-		close(leaguesChan)
-	}()
-	go func() {
-		stuff, err := riotClient.GetMatchlist(ctx, region, sinfo.AccountID, nil)
-		matchesChan <- errChan{stuff, err}
-		close(matchesChan)
-	}()
-	go func() {
-		if region == "kr" {
-			opggchampsChan <- opggRankedChamps(strconv.FormatInt(int64(sinfo.ID), 10), "www")
-		} else {
-			for k, v := range riotRegions {
-				if v == region {
-					opggchampsChan <- opggRankedChamps(strconv.FormatInt(int64(sinfo.ID), 10), k)
-				}
-			}
-		}
-		close(opggchampsChan)
-	}()
-	result, open := <-masteryChan
-	if result.err != nil || !open {
-		logger.Println("mastery error", result.err, open)
+	schamps, err := riotClient.GetAllChampionMasteries(ctx, region, sinfo.ID)
+	if err != nil {
+		logger.Println("mastery error", err)
 		return nil, errors.New("Unknown issue, try again later")
 	}
-	schamps := result.value.([]apiclient.ChampionMastery)
 	if len(schamps) == 0 {
 		return nil, errors.New("Account is too old/unused")
 	}
-	result = <-leaguesChan
-	if result.err != nil {
-		logger.Println("leagues error", result.err, open)
+	sleagues, err := riotClient.GetAllLeaguePositionsForSummoner(ctx, region, sinfo.ID)
+	if err != nil {
+		logger.Println("leagues error", err)
 		return nil, errors.New("Unknown issue, try again later")
 	}
-	sleagues := result.value.([]apiclient.LeaguePosition)
 	var soloInfo, flexInfo, highestRank apiclient.LeaguePosition
 	for _, v := range sleagues {
 		if v.QueueType == "RANKED_FLEX_SR" || v.QueueType == "RANKED_FLEX_TT" {
@@ -465,23 +431,12 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	} else {
 		highestRank = soloInfo
 	}
-	result = <-matchesChan
-	if result.err != nil {
-		logger.Println("matches error", result.err, open)
+	fmt.Printf("%+v\n", highestRank)
+	smatches, err := riotClient.GetMatchlist(ctx, region, sinfo.AccountID, nil)
+	if err != nil {
+		logger.Println("matches error", err)
 		return nil, errors.New("Unknown issue, try again later")
 	}
-	smatches := result.value.(*apiclient.Matchlist)
-	imagesChan := make(chan image.Image, 4)
-	defer close(imagesChan)
-	go func() {
-		imagesChan <- loadImage(fmt.Sprintf("league/profileicon/%v.png", sinfo.ProfileIconID))
-		imagesChan <- loadImage(fmt.Sprintf("league/insignia/%sinsignia.png", strings.ToLower(string(highestRank.Tier))))
-		imagesChan <- loadImage(fmt.Sprintf("league/rank/%s_%s.png", soloInfo.Tier, soloInfo.Rank))
-		imagesChan <- loadImage(fmt.Sprintf("league/rank/%s_%s.png", flexInfo.Tier, flexInfo.Rank))
-		if len(schamps) > 0 {
-			imagesChan <- loadImage(fmt.Sprintf("league/champion/%d.png", schamps[0].ChampionID))
-		}
-	}()
 	roleMatches := make(map[lane.Lane]int)
 	champMatches := make(map[champion.Champion]int)
 	var mainRoles [2]lane.Lane
@@ -531,7 +486,15 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 		}
 	}
 	var champs []leagueMostChamps
-	champs = <-opggchampsChan
+	if region == "kr" {
+		champs = opggRankedChamps(sinfo.PUUID, "www")
+	} else {
+		for k, v := range riotRegions {
+			if v == region {
+				champs = opggRankedChamps(sinfo.PUUID, k)
+			}
+		}
+	}
 	// Create images and freetype context
 	fontFile, err := ioutil.ReadFile("league/FrizQuadrataTT.TTF")
 	if err != nil {
@@ -545,7 +508,6 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	}
 	front := image.NewRGBA(image.Rect(0, 0, 320, 570))
 	back := image.NewRGBA(image.Rect(0, 0, 320, 570))
-	both := image.NewRGBA(image.Rect(0, 0, 640, 570))
 	c := freetype.NewContext()
 	c.SetDPI(72)
 	c.SetFont(f)
@@ -575,21 +537,17 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	draw.Draw(front, cardFront.images["background"].area, cardFront.images["background"].image, cardFront.images["background"].point, draw.Over)
 	draw.Draw(back, cardFront.images["background"].area, cardFront.images["background"].image, cardFront.images["background"].point, draw.Over)
 	delete(cardFront.images, "background")
-	imageInfo = cardFront.images["border"]
-	imageInfo.image = loadImage(fmt.Sprintf("league/rank_border/%sborder.png", strings.ToLower(string(highestRank.Tier))))
-	cardFront.images["border"] = imageInfo
-	cardBack.images["border"] = imageInfo
 	imageInfo = cardFront.images["profileIcon"]
-	imageInfo.image = resize.Resize(100, 0, <-imagesChan, resize.Lanczos3)
+	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/profileicon/%v.png", sinfo.ProfileIconID)), resize.Lanczos3)
 	cardFront.images["profileIcon"] = imageInfo
 	imageInfo = cardFront.images["insignia"]
-	imageInfo.image = resize.Resize(256, 0, <-imagesChan, resize.Lanczos3)
+	imageInfo.image = resize.Resize(256, 0, loadImage(fmt.Sprintf("league/insignia/%sinsignia.png", strings.ToLower(string(highestRank.Tier)))), resize.Lanczos3)
 	cardFront.images["insignia"] = imageInfo
 	imageInfo = cardFront.images["solo"]
-	imageInfo.image = resize.Resize(100, 0, <-imagesChan, resize.Lanczos3)
+	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/rank/%s_%s.png", soloInfo.Tier, soloInfo.Rank)), resize.Lanczos3)
 	cardFront.images["solo"] = imageInfo
 	imageInfo = cardFront.images["flex"]
-	imageInfo.image = resize.Resize(100, 0, <-imagesChan, resize.Lanczos3)
+	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/rank/%s_%s.png", flexInfo.Tier, flexInfo.Rank)), resize.Lanczos3)
 	cardFront.images["flex"] = imageInfo
 	if soloInfo.Tier == "" {
 		soloInfo.Tier = "Unranked"
@@ -603,7 +561,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 		cardFront.images["masteryBorder"] = imageInfo
 
 		imageInfo = cardFront.images["masteryChamp"]
-		imageInfo.image = resize.Resize(93, 0, <-imagesChan, resize.Lanczos3)
+		imageInfo.image = resize.Resize(93, 0, loadImage(fmt.Sprintf("league/champion/%d.png", schamps[0].ChampionID)), resize.Lanczos3)
 		imageInfo.mask = loadImage("league/champmask.png")
 		cardFront.images["masteryChamp"] = imageInfo
 		draw.DrawMask(front, cardFront.images["masteryChamp"].area, cardFront.images["masteryChamp"].image, image.ZP, cardFront.images["masteryChamp"].mask, image.ZP, draw.Over)
@@ -779,82 +737,22 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 		}
 	}
 	logger.Println("Playercard created successfully!")
-	draw.Draw(both, front.Bounds(), front, image.ZP, draw.Src)
-	draw.Draw(both, front.Bounds().Add(image.Pt(321, 0)), back, image.ZP, draw.Src)
+	/*
+		imageInfo = cardFront.images["border"]
+		imageInfo.image = loadImage(fmt.Sprintf("league/rank_border/%sborder.png", strings.ToLower(string(highestRank.Tier))))
+		cardFront.images["border"] = imageInfo
+		cardBack.images["border"] = imageInfo*/
+	both := image.NewRGBA(image.Rect(0, 0, 2*340, 589))
+
+	draw.Draw(both, front.Bounds().Add(image.Pt(10, 17)), front, image.ZP, draw.Src)
+	draw.Draw(both, front.Bounds().Add(image.Pt(350, 17)), back, image.ZP, draw.Src)
+	border := loadImage(fmt.Sprintf("league/rank_border/%sborder.png", strings.ToLower(string(highestRank.Tier))))
+	draw.Draw(both, border.Bounds(), border, image.ZP, draw.Over)
+	draw.Draw(both, border.Bounds().Add(image.Pt(340, 0)), border, image.ZP, draw.Over)
 	return both, nil
-}
-
-// Get the width in pixel of a string (if size is 0, use whatever was set previously)
-// If font size is specified, it WILL change the font size for the given freetype *Context
-func textWidth(c *freetype.Context, text string, size int) int {
-	temp := image.NewRGBA(image.Rect(0, 0, 300, 100))
-	pt := freetype.Pt(0, 50)
-	if size > 0 {
-		c.SetFontSize(float64(size))
-	}
-	ftcopy := *c
-	ftcopy.SetDst(temp)
-	endpoint, err := ftcopy.DrawString(text, pt)
-	if err != nil {
-		logger.Println("Error getting text width:", err)
-		return -1
-	}
-	return int(endpoint.X >> 6)
-}
-
-// Take a number and add commas every three digits, from the left
-func commafy(s string) string {
-	newLength := len(s) + (len(s)-1)/3
-	newString := make([]byte, newLength)
-	newLength--
-	count := 0
-	for i := len(s) - 1; i >= 0; i-- {
-		if count == 3 {
-			count = 0
-			newString[newLength] = ','
-			newLength--
-		}
-		newString[newLength] = s[i]
-		count++
-		newLength--
-	}
-	return string(newString)
-}
-
-// Calling both functions from the strings package to get all caps into titles is annoying
-func titlefy(text string) string {
-	return strings.Title(strings.ToLower(text))
 }
 
 // Wrapper for converting image.Point to fixed.Point26_6 to make things a tad cleaner
 func pointToFixed(point image.Point) fixed.Point26_6 {
 	return freetype.Pt(point.X, point.Y)
-}
-
-func loadImage(path string) image.Image {
-	if strings.Contains(path, "http") {
-		response, err := http.Get(path)
-		if err != nil || response.StatusCode != 200 {
-			logger.Println("error getting image from url:", response.StatusCode, path, err)
-			return nil
-		}
-		image, err := png.Decode(response.Body)
-		response.Body.Close()
-		if err != nil {
-			logger.Println("error decoding image from url:", err)
-			return nil
-		}
-		return image
-	}
-	file, err := ioutil.ReadFile(path)
-	if err != nil {
-		logger.Println("error reading file:", path, err)
-		return nil
-	}
-	image, err := png.Decode(bytes.NewReader(file))
-	if err != nil {
-		logger.Println("error decoding image from file:", err)
-		return nil
-	}
-	return image
 }

@@ -31,7 +31,7 @@ type errChan struct {
 }
 type riotVerifyKey struct {
 	dID    string
-	sID    int64
+	sID    string
 	region region.Region
 }
 type ddchamp struct {
@@ -70,13 +70,15 @@ var riotRegions = map[string]region.Region{
 	"ru":   region.RU,
 }
 var riotRanks = map[tier.Tier]int{
-	"BRONZE":     1,
-	"SILVER":     2,
-	"GOLD":       3,
-	"PLATINUM":   4,
-	"DIAMOND":    5,
-	"MASTER":     6,
-	"CHALLENGER": 7,
+	"IRON":        1,
+	"BRONZE":      2,
+	"SILVER":      3,
+	"GOLD":        4,
+	"PLATINUM":    5,
+	"DIAMOND":     6,
+	"MASTER":      7,
+	"GRANDMASTER": 8,
+	"CHALLENGER":  9,
 }
 
 func summonerCardFront() cardTemplate {
@@ -85,9 +87,6 @@ func summonerCardFront() cardTemplate {
 			"background": imageData{
 				area:  image.Rect(0, 0, 320, 570),
 				point: image.Pt(80, 141),
-			}, "border": imageData{
-				area:  image.Rect(0, 0, 320, 570),
-				point: image.ZP,
 			}, "profileIcon": imageData{
 				area:  image.Rect(110, 32, 210, 132),
 				point: image.ZP,

@@ -9,11 +9,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/yuhanfang/riot/constants/region"
 
@@ -29,11 +27,12 @@ var (
 	dmchannel = "404261686057631748" // real bot
 )
 
-func main() {
-	os.Mkdir("logs", os.ModeDir)
-	f, _ := os.Create("logs/" + time.Now().Format("2006-01-02_15-04-05") + ".log")
-	defer f.Close()
-	logger = log.New(f, "", log.LstdFlags)
+func main() { /*
+		os.Mkdir("logs", os.ModeDir)
+		f, _ := os.Create("logs/" + time.Now().Format("2006-01-02_15-04-05") + ".log")
+		defer f.Close()
+		logger = log.New(f, "", log.LstdFlags)*/
+	logger = log.New(os.Stdout, "", log.LstdFlags)
 	// Load the API key
 	file, err := os.Open("riotapi.key")
 	if err != nil {
@@ -94,15 +93,11 @@ func main() {
 	}
 	defer riotDB.Close()
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
-	consoleQuit := make(chan struct{})
-	go console(discord, consoleQuit)
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	select {
 	case sig := <-sc:
 		fmt.Println("Quiting due to signal", sig)
-	case <-consoleQuit:
-		fmt.Println("Quit from console")
 	}
 	discord.Close()
 }
@@ -203,12 +198,7 @@ func messageReactAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 		for k, v := range emojis {
 			if v == m.MessageReaction.Emoji.Name {
 				if k < len(players) {
-					sid, err := strconv.ParseInt(players[k], 10, 64)
-					if err != nil {
-						logger.Println("messageReactAdd parseint:", err)
-						return
-					}
-					summoner, err := riotClient.GetBySummonerID(ctx, region.Region(players[0]), sid)
+					summoner, err := riotClient.GetBySummonerID(ctx, region.Region(players[0]), players[k])
 					if err != nil {
 						logger.Println("messageReactAdd summoner by id:", err)
 						return
@@ -269,6 +259,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 	if m.ChannelID == dmchannel {
-		consoleCmd(strings.Fields(m.Content), s, nil, true)
+		consoleCmd(strings.Fields(m.Content), s)
 	}
 }

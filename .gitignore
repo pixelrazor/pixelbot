@@ -38,3 +38,4 @@ riottest\.go
 
 logs/
 pixelbot
+commands.bytes

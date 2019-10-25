@@ -18,6 +18,8 @@ In the second format, the mention can be added __anywhere__ in the message (**\<
 - [League of Legends](#league)
     - [x] [Playercards](#lcard)
     - [x] [In-game cards](#lingame)
+- [osu!](#osu)
+    - [x] [Playercards](#osucard)
 - [Fortnite](#fortnite)
     - [ ] [Something with player stats?](#fstats)
 - [Dota 2](#dota2)
@@ -46,6 +48,14 @@ You can pull up an image showing the teams of the current match for the specifie
 Here's an example of what this looks like:
 
 ![example in-game card](leagueingame.png)
+# osu!<a name="osu"></a>
+## osu! Playercards<a name='osucard'></a>
+Playercards can be created using the following command:
+>\/osu \<player\>
+
+Here's a sample playercard:
+
+![example playercard](osuPlayercard.png)
 # Fornite<a name="fortnite"></a>
 Under construction
 ## Something with player stats?<a name="fstats"></a>

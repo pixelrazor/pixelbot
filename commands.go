@@ -50,10 +50,6 @@ func parse(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
-func idToDate(s int64) time.Time {
-	const discordEpoch int64 = 1420070400000
-	return time.Unix(((s>>22)+discordEpoch)/1000, 0)
-}
 func helpcmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	msg := &discordgo.MessageEmbed{
 		Title:       "__**Pixel Bot Commands**__",
