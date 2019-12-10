@@ -41,8 +41,8 @@ func consoleCmd(cmd []string, discord *discordgo.Session) bool {
 			discord.ChannelMessageSend(dmchannel, "```\n"+"message <channel id> <message>"+"```")
 		}
 	case "quotes":
-		riotDB.View(func(t *bolt.Tx) error {
-			b := t.Bucket([]byte("quotes"))
+		db.View(func(t *bolt.Tx) error {
+			b := t.Bucket([]byte(riotBucket)).Bucket([]byte(riotQuotesBucket))
 			if b == nil {
 				return errors.New("Error getting quotes bucket")
 			}

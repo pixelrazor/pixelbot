@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"github.com/boltdb/bolt"
 	"image/png"
 	"math/rand"
 	"os"
@@ -330,10 +332,15 @@ func statscmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 	}
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot is currently on %v servers with a reach of %v people! %v commands have been run so far.",
-		commafy(strconv.Itoa(len(s.State.Guilds))),
-		commafy(strconv.Itoa(users)),
-		commafy(strconv.FormatUint(commandsRun, 10))))
+	db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(generalBucket))
+		commandsRun := binary.BigEndian.Uint64(b.Get([]byte("commands")))
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot is currently on %v servers with a reach of %v people! %v commands have been run so far.",
+			commafy(strconv.Itoa(len(s.State.Guilds))),
+			commafy(strconv.Itoa(users)),
+			commafy(strconv.FormatUint(commandsRun, 10))))
+		return nil
+	})
 }
 func aboutcmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	file, err := os.Open("Avatar.png")

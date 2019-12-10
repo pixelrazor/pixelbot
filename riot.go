@@ -34,37 +34,17 @@ import (
 	"github.com/nfnt/resize"
 )
 
-var riotKey, riotPatch string
+var riotPatch string
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 var ctx = context.Background()
 var limiter = ratelimit.NewLimiter()
 var riotClient apiclient.Client
 var riotChamps map[champion.Champion]string
-var riotDB *bolt.DB
 
 // Initialize some data for use later
-func riotInit() error {
+func riotInit(key string) error {
 	riotVerified = make(map[riotVerifyKey]string)
-	var err error
-	riotDB, err = bolt.Open("league/riot.db", 0666, &bolt.Options{Timeout: 5 * time.Second})
-	if err != nil {
-		fmt.Println("Error opening riot.db")
-		return err
-	}
-	err = riotDB.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("quotes"))
-		if err != nil {
-			fmt.Println("Error making quotes bucket")
-			return err
-		}
-		_, err = tx.CreateBucketIfNotExists([]byte("verify"))
-		if err != nil {
-			fmt.Println("Error making quotes bucket")
-			return err
-		}
-		return nil
-	})
-	riotClient = apiclient.New(riotKey, httpClient, limiter)
+	riotClient = apiclient.New(key, httpClient, limiter)
 	var patches []string
 	res, err := http.Get("https://ddragon.leagueoflegends.com/api/versions.json")
 	if err != nil {
@@ -159,14 +139,11 @@ func riotCheckVerify(playername, discordID string, region region.Region) error {
 	if pcode != code {
 		return errors.New("Error: your verification code does not match the summoner's")
 	}
-	err = riotDB.Update(func(tx *bolt.Tx) error {
-		verify := tx.Bucket([]byte("verify"))
-		if verify == nil {
-			return errors.New("Unknown database error occured")
-		}
-		err := verify.Put([]byte(fmt.Sprintf("%v%v%v", discordID, summoner.AccountID, region)), []byte("1"))
+	err = db.Update(func(tx *bolt.Tx) error {
+		verify := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotVerifyBucket))
+		err := verify.Put([]byte(fmt.Sprintf("%v%v", discordID, summoner.PUUID)), []byte("1"))
 		if err != nil {
-			return errors.New("Unknown database error occured")
+			return err
 		}
 		return nil
 	})
@@ -181,12 +158,9 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 	if err != nil {
 		return errors.New("Error: Could not find summoner " + pname)
 	}
-	err = riotDB.View(func(tx *bolt.Tx) error {
-		verify := tx.Bucket([]byte("verify"))
-		if verify == nil {
-			return errors.New("Unknown database error occured")
-		}
-		if result := verify.Get([]byte(fmt.Sprintf("%v%v%v", discordID, summoner.AccountID, region))); result != nil {
+	err = db.View(func(tx *bolt.Tx) error {
+		verify := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotVerifyBucket))
+		if result := verify.Get([]byte(fmt.Sprintf("%v%v", discordID, summoner.PUUID))); result != nil {
 			return nil
 		}
 		return errors.New("Error: You are not verified for this account")
@@ -194,14 +168,11 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 	if err != nil {
 		return err
 	}
-	err = riotDB.Update(func(tx *bolt.Tx) error {
-		quotes := tx.Bucket([]byte("quotes"))
-		if quotes == nil {
-			return errors.New("Unknown database error occured")
-		}
-		err := quotes.Put([]byte(fmt.Sprintf("%v%v", summoner.AccountID, region)), []byte(quote))
+	err = db.Update(func(tx *bolt.Tx) error {
+		quotes := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotQuotesBucket))
+		err := quotes.Put([]byte(fmt.Sprintf("%v%v", summoner.PUUID, region)), []byte(quote))
 		if err != nil {
-			return errors.New("Unknown database error occured")
+			return err
 		}
 		return nil
 	})
@@ -431,7 +402,6 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	} else {
 		highestRank = soloInfo
 	}
-	fmt.Printf("%+v\n", highestRank)
 	smatches, err := riotClient.GetMatchlist(ctx, region, sinfo.AccountID, nil)
 	if err != nil {
 		logger.Println("matches error", err)
@@ -492,6 +462,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 		for k, v := range riotRegions {
 			if v == region {
 				champs = opggRankedChamps(sinfo.PUUID, k)
+				opggRefresh(*playername, k)
 			}
 		}
 	}
@@ -714,13 +685,9 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	for k, v := range oldRanks.text {
 		cardBack.text[k] = v
 	}
-	_ = riotDB.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("quotes"))
-		if b == nil {
-			logger.Println("Error opening quote bucket")
-			return errors.New("Error opening bucket???")
-		}
-		v := b.Get([]byte(fmt.Sprintf("%v%v", sinfo.AccountID, region)))
+	_ = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotQuotesBucket))
+		v := b.Get([]byte(fmt.Sprintf("%v%v", sinfo.PUUID, region)))
 		if v != nil {
 			riotAddQuote(string(v), cardBack.text, c)
 		}

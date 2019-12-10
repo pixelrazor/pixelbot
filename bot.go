@@ -1,30 +1,25 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/boltdb/bolt"
+	"github.com/yuhanfang/riot/constants/region"
 	"image/png"
 	"log"
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
-
-	"github.com/yuhanfang/riot/constants/region"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 var (
-	logger                    *log.Logger
-	servers                   map[string]bool
-	commandsRun               uint64
-	commandsLock, serversLock sync.Mutex
-	//dmchannel                 = "460949603496230914" // test bot
-	dmchannel = "404261686057631748" // real bot
+	logger    *log.Logger
+	dmchannel = "460949603496230914" // test bot
+	//dmchannel = "404261686057631748" // real bot
 )
 
 func main() { /*
@@ -34,41 +29,30 @@ func main() { /*
 		logger = log.New(f, "", log.LstdFlags)*/
 	logger = log.New(os.Stdout, "", log.LstdFlags)
 	// Load the API key
-	file, err := os.Open("riotapi.key")
-	if err != nil {
-		fmt.Println("Error opening Riot API key file:", err)
-		return
-	}
-	if scanner := bufio.NewScanner(file); scanner.Scan() {
-		riotKey = scanner.Text()
-		fmt.Println("Riot api key:", riotKey)
-	}
-	file.Close()
-	file, err = os.Open("osuapi.key")
-	if err != nil {
-		fmt.Println("Error opening Osu API key file:", err)
-		return
-	}
-	if scanner := bufio.NewScanner(file); scanner.Scan() {
-		osukey = scanner.Text()
-		fmt.Println("Osu api key:", osukey)
-	}
-	file.Close()
-	// Create the bot
-	file, err = os.Open("discordapi.key")
-	if err != nil {
-		fmt.Println("Error opening Discord API key file:", err)
-		return
-	}
-	var discordKey string
-	if scanner := bufio.NewScanner(file); scanner.Scan() {
-		discordKey = scanner.Text()
-		fmt.Println("Discord api key:", discordKey)
-	}
-	file.Close()
+	riotKey := os.Getenv("RIOT_API")
+	osuKey := os.Getenv("OSU_API")
+	discordKey := os.Getenv("DISCORD_API")
+	fmt.Println("Riot api key:", riotKey)
+	fmt.Println("Osu api key:", osuKey)
+	fmt.Println("Discord api key:", discordKey)
 	discord, err := discordgo.New("Bot " + discordKey)
 	if err != nil {
 		fmt.Println("Error making discordbot object:", err)
+		return
+	}
+	err = initDB()
+	if err != nil {
+		fmt.Println("Error initializing db:", err)
+		return
+	}
+	// Initialize the osu API stuff
+	if err = initOsu(osuKey); err != nil {
+		fmt.Println("Error during initOsu():", err)
+		return
+	}
+	// Initialize the riot API stuff
+	if err = riotInit(riotKey); err != nil {
+		fmt.Println("Error during riotInit():", err)
 		return
 	}
 	// Event handlers
@@ -86,12 +70,7 @@ func main() { /*
 		fmt.Println("Error opening discord", err)
 		return
 	}
-	// Initialize the riot API stuff
-	if err = riotInit(); err != nil {
-		fmt.Println("Error during riotInit():", err)
-		return
-	}
-	defer riotDB.Close()
+	defer db.Close()
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
@@ -105,26 +84,6 @@ func onReady(s *discordgo.Session, r *discordgo.Ready) {
 	s.UpdateStatus(0, "/help or @Pixel Bot help")
 }
 func botInit() error {
-	{
-		f, err := os.Open("servers.txt")
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		servers = make(map[string]bool)
-		scan := bufio.NewScanner(f)
-		for scan.Scan() {
-			servers[scan.Text()] = true
-		}
-	}
-	f, err := os.Open("commands.bytes")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	number := make([]byte, 8)
-	f.Read(number)
-	commandsRun = binary.BigEndian.Uint64(number)
 	cmdHandlers["help"] = helpcmd
 	cmdHandlers["about"] = aboutcmd
 	cmdHandlers["uptime"] = uptimecmd
@@ -139,46 +98,33 @@ func botInit() error {
 	return nil
 }
 func serverJoin(s *discordgo.Session, m *discordgo.GuildCreate) {
-	if !servers[m.ID] {
-		serversLock.Lock()
-		defer serversLock.Unlock()
-		servers[m.ID] = true
-		f, err := os.OpenFile("servers.txt", os.O_APPEND|os.O_WRONLY, 0666)
-		if err != nil {
-			fmt.Println("strange issue tring to open servers.txt:", err)
+	db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(generalBucket)).Bucket([]byte(generalServersBucket))
+		server := b.Get([]byte(m.ID))
+		if len(server) == 0 {
+			b.Put([]byte(m.ID),[]byte{1})
+			s.ChannelMessageSend(dmchannel, "I joined "+m.Name+fmt.Sprintf(" (%v members)", m.MemberCount))
 		}
-		f.WriteString(m.ID + "\n")
-		s.ChannelMessageSend(dmchannel, "I joined "+m.Name+fmt.Sprintf(" (%v members)", m.MemberCount))
-	}
+		return nil
+	})
 }
 func serverLeave(s *discordgo.Session, m *discordgo.GuildDelete) {
-	serversLock.Lock()
-	defer serversLock.Unlock()
-	delete(servers, m.ID)
-	f, err := os.Create("servers.txt")
-	if err != nil {
-		fmt.Println("error opening servers.txt to remove someone")
-		return
-	}
-	defer f.Close()
-	for k, v := range servers {
-		if v {
-			f.WriteString(k + "\n")
-		}
-	}
+	db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(generalBucket)).Bucket([]byte(generalServersBucket))
+		b.Delete([]byte(m.ID))
+		return nil
+	})
 	s.ChannelMessageSend(dmchannel, "I was removed from "+m.Name)
 }
 func incrementCommandsRun() {
-	commandsLock.Lock()
-	defer commandsLock.Unlock()
-	commandsRun++
-	f, err := os.Create("commands.bytes")
-	if err != nil {
-		return
-	}
-	cmdBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(cmdBytes, commandsRun)
-	f.Write(cmdBytes)
+	db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(generalBucket))
+		val := binary.BigEndian.Uint64(b.Get([]byte("commands")))
+		cmdBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(cmdBytes, val+1)
+		b.Put([]byte("commands"), cmdBytes)
+		return nil
+	})
 }
 
 func messageReactAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {

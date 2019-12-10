@@ -28,11 +28,14 @@ func opggLink(region region.Region) string {
 	}
 	return "http://na.op.gg/"
 }
+
 /*
 <button class="Button SemiRound Green" id="SummonerRefreshButton" onclick="$.OP.GG.summoner.renewBtn.start(this, '51630642');">Updated</button>
 
 
 */
+
+
 func opggRankedChamps(summonerID, region string) []leagueMostChamps {
 	var champs []leagueMostChamps
 	var champ *leagueMostChamps
