@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/boltdb/bolt"
 	"image/png"
 	"math/rand"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boltdb/bolt"
 
 	"github.com/yuhanfang/riot/constants/region"
 
@@ -171,16 +172,16 @@ func singleuinfo(u *discordgo.User, channel, guild string, s *discordgo.Session)
 			URL: u.AvatarURL(""),
 		},
 		Fields: []*discordgo.MessageEmbedField{
-			{"ID", u.ID, true},
-			{"Joined server", join.Format("January 2, 2006"), true},
-			{"Joined Discord", created.Format("January 2, 2006"), true},
+			{Name: "ID", Value: u.ID, Inline: true},
+			{Name: "Joined server", Value: join.Format("January 2, 2006"), Inline: true},
+			{Name: "Joined Discord", Value: created.Format("January 2, 2006"), Inline: true},
 		},
 	}
 	if roles != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{fmt.Sprintf("Roles (%v)", len(member.Roles)), roles, true})
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: fmt.Sprintf("Roles (%v)", len(member.Roles)), Value: roles, Inline: true})
 	}
 	if member.Nick != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{"Nickname", member.Nick, true})
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Nickname", Value: member.Nick, Inline: true})
 	}
 	_, err = s.ChannelMessageSendEmbed(channel, embed)
 }
@@ -245,9 +246,9 @@ func singlecinfo(cID string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		Description: channel.Topic + " ",
 		Color:       embedColor,
 		Fields: []*discordgo.MessageEmbedField{
-			{"ID", cID, true},
-			{"Created at", idToDate(id).Format("January 2, 2006"), true},
-			{"Users", fmt.Sprint(len(channel.Recipients)), true},
+			{Name: "ID", Value: cID, Inline: true},
+			{Name: "Created at", Value: idToDate(id).Format("January 2, 2006"), Inline: true},
+			{Name: "Users", Value: fmt.Sprint(len(channel.Recipients)), Inline: true},
 		},
 	}
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)
@@ -297,15 +298,15 @@ func sinfocmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 				URL: "attachment://thumb.png",
 			},
 			Fields: []*discordgo.MessageEmbedField{
-				{"ID", guild.ID, true},
-				{"Owner", fmt.Sprintf("%v#%v", owner.Username, owner.Discriminator), true},
-				{"Members", fmt.Sprint(guild.MemberCount), true},
-				{"Text channels", fmt.Sprint(text), true},
-				{"Voice channels", fmt.Sprint(voice), true},
-				{"Created at", created.Format("January 2, 2006"), true},
-				{"Region", guild.Region, true},
-				{"Roles", fmt.Sprint(len(guild.Roles)), true},
-				{"Custom Emojis", fmt.Sprint(len(guild.Emojis)), true},
+				{Name: "ID", Value: guild.ID, Inline: true},
+				{Name: "Owner", Value: fmt.Sprintf("%v#%v", owner.Username, owner.Discriminator), Inline: true},
+				{Name: "Members", Value: fmt.Sprint(guild.MemberCount), Inline: true},
+				{Name: "Text channels", Value: fmt.Sprint(text), Inline: true},
+				{Name: "Voice channels", Value: fmt.Sprint(voice), Inline: true},
+				{Name: "Created at", Value: created.Format("January 2, 2006"), Inline: true},
+				{Name: "Region", Value: guild.Region, Inline: true},
+				{Name: "Roles", Value: fmt.Sprint(len(guild.Roles)), Inline: true},
+				{Name: "Custom Emojis", Value: fmt.Sprint(len(guild.Emojis)), Inline: true},
 			},
 		},
 		Files: []*discordgo.File{
