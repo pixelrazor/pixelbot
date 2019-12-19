@@ -462,7 +462,6 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 		for k, v := range riotRegions {
 			if v == region {
 				champs = opggRankedChamps(sinfo.PUUID, k)
-				opggRefresh(*playername, k)
 			}
 		}
 	}
