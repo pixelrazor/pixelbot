@@ -19,8 +19,6 @@ import (
 
 	"github.com/boltdb/bolt"
 
-	"github.com/PuerkitoBio/goquery"
-
 	"github.com/yuhanfang/riot/apiclient"
 	"github.com/yuhanfang/riot/constants/champion"
 	"github.com/yuhanfang/riot/constants/lane"
@@ -177,55 +175,6 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 		return nil
 	})
 	return err
-}
-
-// Attempt to get a Player's Solo rank
-func riotPastRanks(c *freetype.Context, username, region string) cardTemplate {
-	var ranks cardTemplate
-	ranks.images = make(map[string]imageData)
-	ranks.text = make(map[string]textData)
-	var seasonRanks []string
-	var seasons []int
-	res, err := http.Get("http://" + region + ".op.gg/summoner/userName=" + strings.Replace(username, " ", "+", -1))
-	if err != nil {
-		logger.Println("Error getting past ranks:", err)
-		return ranks
-	}
-	defer res.Body.Close()
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		logger.Println("Error getting past ranks:", err)
-		return ranks
-	}
-	doc.Find(".PastRankList li").Each(func(i int, s *goquery.Selection) {
-		var (
-			season int
-			tier   string
-		)
-		fmt.Sscanf(strings.TrimSpace(s.Text()), "S%d %s", &season, &tier)
-		tier = strings.ToUpper(tier)
-		seasonRanks = append(seasonRanks, tier)
-		seasons = append(seasons, season)
-	})
-	var ranksImages []imageData
-	if len(seasonRanks) > 3 {
-		ranksImages = mostChampsTemplates(3)
-		seasonRanks = seasonRanks[len(seasonRanks)-3:]
-		seasons = seasons[len(seasons)-3:]
-	} else if len(seasonRanks) > 0 {
-		ranksImages = mostChampsTemplates(len(seasonRanks))
-	}
-	for i, v := range seasonRanks {
-		var text textData
-		ranksImages[i].area = image.Rect(ranksImages[i].area.Min.X, 350, ranksImages[i].area.Max.X, 425)
-		ranksImages[i].image = resize.Resize(75, 0, loadImage(fmt.Sprintf("league/rank/%s_I.png", v)), resize.Lanczos3)
-		ranks.images[fmt.Sprintf("%v%s", seasons[i], v)] = ranksImages[i]
-		text.fontSize = 12
-		text.text = fmt.Sprintf("Season %v", seasons[i])
-		text.point = image.Pt((ranksImages[i].area.Min.X+ranksImages[i].area.Max.X)/2-textWidth(c, text.text, text.fontSize)/2, 435)
-		ranks.text[fmt.Sprintf("%v%s", seasons[i], v)] = text
-	}
-	return ranks
 }
 
 func riotAddQuote(quote string, tdata map[string]textData, c *freetype.Context) {
@@ -455,16 +404,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 			mainRoles[i] = lane.Lane(titlefy(string(mainRoles[i])))
 		}
 	}
-	var champs []leagueMostChamps
-	if region == "kr" {
-		champs = opggRankedChamps(sinfo.PUUID, "www")
-	} else {
-		for k, v := range riotRegions {
-			if v == region {
-				champs = opggRankedChamps(sinfo.PUUID, k)
-			}
-		}
-	}
+	champs := opggRankedChamps(sinfo.Name, region)
 	// Create images and freetype context
 	fontFile, err := ioutil.ReadFile("league/FrizQuadrataTT.TTF")
 	if err != nil {
@@ -485,20 +425,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	c.SetSrc(image.White)
 	c.SetDst(front)
 	// Load the templates and fill in the missing info.
-	oldRanksChan := make(chan cardTemplate, 1)
-	defer close(oldRanksChan)
-	go func() {
-		if region == "kr" {
-			oldRanksChan <- riotPastRanks(c, sinfo.Name, "www")
-		} else {
-			for k, v := range riotRegions {
-				if v == region {
-					oldRanksChan <- riotPastRanks(c, sinfo.Name, k)
-				}
-			}
-		}
-		oldRanksChan <- *new(cardTemplate)
-	}()
+	oldRanks := opggPastRanks(c, sinfo.Name, region)
 	cardFront := summonerCardFront()
 	cardBack := summonerCardBack()
 	imageInfo := cardFront.images["background"]
@@ -603,7 +530,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 			images = mostChampsTemplates(len(champs))
 		}
 		for i := range images {
-			images[i].image = loadImage(champs[i].imageURL)
+			images[i].image = resize.Resize(uint(images[i].area.Dy()), 0, loadImage(champs[i].imageURL), resize.Lanczos3)
 		}
 		i := 0
 		for k, v := range images {
@@ -671,7 +598,6 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 			i++
 		}
 	}
-	oldRanks := <-oldRanksChan
 	if len(oldRanks.images) > 0 {
 		textData.text = "Previous ranks"
 		textData.fontSize = 20
