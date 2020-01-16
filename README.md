@@ -70,6 +70,6 @@ Under construction
 Under construction
 # CS:GO<a name="csgo"></a>
 Under construction
-# Support Me
+# Support Medfg
 
 <a href="https://www.buymeacoffee.com/iZ1Dhem" target="_blank" name="coffee"><img src="https://www.buymeacoffee.com/assets/img/custom_images/purple_img.png" alt="Buy Me A Coffee" style="height: auto !important;width: auto !important;" ></a>
