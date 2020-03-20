@@ -25,7 +25,7 @@ func osuPlayercard(name string) (*image.RGBA, error) {
 		logger.Println("osu api user error:", err)
 		return nil, err
 	}
-	avatar := loadImage("https://a.ppy.sh/" + user.UserID) // fucking dumb, i should make it user.ID
+	avatar := loadImageNoErr("https://a.ppy.sh/" + user.UserID) // fucking dumb, i should make it user.ID
 	if avatar == nil {
 		logger.Println("Osu playercard avatar error: null image")
 		return nil, errors.New("Error: An unknown issue occured")

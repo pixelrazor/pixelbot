@@ -40,13 +40,13 @@ func idToDate(s int64) time.Time {
 
 // Load an image from a url or file
 // todo: return error as well
-func loadImage(path string) image.Image {
+func loadImage(path string) (image.Image, error) {
 	var reader io.Reader
 	if strings.Contains(path, "http") {
 		response, err := http.Get(path)
 		if err != nil || response.StatusCode != 200 {
 			logger.Println("error getting image from url:", response.StatusCode, path, err)
-			return nil
+			return nil, err
 		}
 		defer response.Body.Close()
 		reader = response.Body
@@ -54,15 +54,20 @@ func loadImage(path string) image.Image {
 		file, err := ioutil.ReadFile(path)
 		if err != nil {
 			logger.Println("error reading file:", path, err)
-			return nil
+			return nil, err
 		}
 		reader = bytes.NewReader(file)
 	}
 	img, format, err := image.Decode(reader)
 	if err != nil {
-		logger.Println("error decoding image from file:", format, err)
-		return nil
+		logger.Println("error decoding image from file:", format, err, path)
+		return nil, err
 	}
+	return img, nil
+}
+
+func loadImageNoErr(path string) image.Image {
+	img, _ := loadImage(path)
 	return img
 }
 

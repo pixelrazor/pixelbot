@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -14,8 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	ddragon "github.com/pixelrazor/pixelbot/league"
 
 	"github.com/boltdb/bolt"
 
@@ -43,53 +40,55 @@ var riotChamps map[champion.Champion]string
 func riotInit(key string) error {
 	riotVerified = make(map[riotVerifyKey]string)
 	riotClient = apiclient.New(key, httpClient, limiter)
-	var patches []string
-	res, err := http.Get("https://ddragon.leagueoflegends.com/api/versions.json")
-	if err != nil {
-		return err
-	}
-	asd, _ := ioutil.ReadAll(res.Body)
-	json.Unmarshal(asd, &patches)
-	res.Body.Close()
-	riotPatch = patches[0]
-	res, err = http.Get("http://ddragon.leagueoflegends.com/cdn/" + riotPatch + "/data/en_US/champion.json")
-	if err != nil {
-		return err
-	}
-	ddchamps := new(ddchampions)
-	asd, _ = ioutil.ReadAll(res.Body)
-	json.Unmarshal(asd, ddchamps)
-	res.Body.Close()
-	riotChamps = ddchamps.toMap()
-	go func() {
-		ddragon.GetChamps(patches[0])
-		ddragon.GetIcons(patches[0])
-		ddragon.GetRunes(patches[0])
-		ddragon.GetSumms(patches[0])
-		for true {
-			var patches []string
-			res, err := http.Get("https://ddragon.leagueoflegends.com/api/versions.json")
-			if err != nil {
-				continue
-			}
-			asd, _ := ioutil.ReadAll(res.Body)
-			json.Unmarshal(asd, &patches)
-			if riotPatch != patches[0] {
-				res, err = http.Get("http://ddragon.leagueoflegends.com/cdn/" + riotPatch + "/data/en_US/champion.json")
-				if err != nil {
-					continue
-				}
-				ddchamps := new(ddchampions)
-				asd, _ = ioutil.ReadAll(res.Body)
-				json.Unmarshal(asd, ddchamps)
-				res.Body.Close()
-				riotChamps = ddchamps.toMap()
-			}
-			riotPatch = patches[0]
-			res.Body.Close()
-			<-time.After(time.Hour)
-		}
-	}()
+	// TODO: fetch by need
+	//var patches []string
+	//res, err := http.Get("https://ddragon.leagueoflegends.com/api/versions.json")
+	//if err != nil {
+	//	return err
+	//}
+	//asd, _ := ioutil.ReadAll(res.Body)
+	//json.Unmarshal(asd, &patches)
+	//res.Body.Close()
+	//riotPatch = patches[0]
+	//res, err = http.Get("http://ddragon.leagueoflegends.com/cdn/" + riotPatch + "/data/en_US/champion.json")
+	//if err != nil {
+	//	return err
+	//}
+	//ddchamps := new(ddchampions)
+	//asd, _ = ioutil.ReadAll(res.Body)
+	//json.Unmarshal(asd, ddchamps)
+	//res.Body.Close()
+	//riotChamps = ddchamps.toMap()
+	//go func() {
+	//	ddragon.GetChamps(patches[0])
+	//	ddragon.GetIcons(patches[0])
+	//	ddragon.GetRunes(patches[0])
+	//	ddragon.GetSumms(patches[0])
+	//	for true {
+	//		var patches []string
+	//		res, err := http.Get("https://ddragon.leagueoflegends.com/api/versions.json")
+	//		if err != nil {
+	//			continue
+	//		}
+	//		asd, _ := ioutil.ReadAll(res.Body)
+	//		json.Unmarshal(asd, &patches)
+	//		if riotPatch != patches[0] {
+	//			res, err = http.Get("http://ddragon.leagueoflegends.com/cdn/" + riotPatch + "/data/en_US/champion.json")
+	//			if err != nil {
+	//				continue
+	//			}
+	//			ddchamps := new(ddchampions)
+	//			asd, _ = ioutil.ReadAll(res.Body)
+	//			json.Unmarshal(asd, ddchamps)
+	//			res.Body.Close()
+	//			riotChamps = ddchamps.toMap()
+	//		}
+	//		riotPatch = patches[0]
+	//		res.Body.Close()
+	//		<-time.After(time.Hour)
+	//	}
+	//}()
+	// TODO: end todo section
 	return nil
 }
 
@@ -245,7 +244,7 @@ func riotMakeInGame(playername string, region region.Region) (*image.RGBA, strin
 	} else {
 		ingame = image.NewRGBA(image.Rect(0, 0, 700, (blue)*64))
 	}
-	bg := loadImage("league/ingame.png")
+	bg, _ := loadImage("league/ingame.png")
 	draw.Draw(ingame, ingame.Bounds(), bg, image.ZP, draw.Src)
 	for i := 0; i < blue; i++ {
 		player := <-left
@@ -294,11 +293,11 @@ func riotMakeParticipant(done chan riotInGameCH, font *truetype.Font, player api
 	c.SetClip(card.Bounds())
 	c.SetSrc(image.White)
 	c.SetDst(card)
-	champ := resize.Resize(64, 0, loadImage(fmt.Sprintf("league/champion/%v.png", player.ChampionId)), resize.Lanczos3)
-	s1 := resize.Resize(32, 0, loadImage(fmt.Sprintf("league/summoners/%v.png", player.Spell1Id)), resize.Lanczos3)
-	s2 := resize.Resize(32, 0, loadImage(fmt.Sprintf("league/summoners/%v.png", player.Spell2Id)), resize.Lanczos3)
-	r1 := resize.Resize(32, 0, loadImage(fmt.Sprintf("league/runes/%v.png", player.Perks.PerkStyle)), resize.Lanczos3)
-	r2 := resize.Resize(32, 0, loadImage(fmt.Sprintf("league/runes/%v.png", player.Perks.PerkSubStyle)), resize.Lanczos3)
+	champ := resize.Resize(64, 0, getChampionSquare(player.ChampionId), resize.Lanczos3)
+	s1 := resize.Resize(32, 0, loadImageNoErr(fmt.Sprintf("league/summoners/%v.png", player.Spell1Id)), resize.Lanczos3)
+	s2 := resize.Resize(32, 0, loadImageNoErr(fmt.Sprintf("league/summoners/%v.png", player.Spell2Id)), resize.Lanczos3)
+	r1 := resize.Resize(32, 0, loadImageNoErr(fmt.Sprintf("league/runes/%v.png", player.Perks.PerkStyle)), resize.Lanczos3)
+	r2 := resize.Resize(32, 0, loadImageNoErr(fmt.Sprintf("league/runes/%v.png", player.Perks.PerkSubStyle)), resize.Lanczos3)
 	draw.Draw(card, champ.Bounds().Add(style[0]), champ, image.ZP, draw.Over)
 	draw.Draw(card, s1.Bounds().Add(style[1]), s1, image.ZP, draw.Over)
 	draw.Draw(card, s2.Bounds().Add(style[2]), s2, image.ZP, draw.Over)
@@ -429,22 +428,22 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	cardFront := summonerCardFront()
 	cardBack := summonerCardBack()
 	imageInfo := cardFront.images["background"]
-	imageInfo.image = loadImage("league/bg.png")
+	imageInfo.image = loadImageNoErr("league/bg.png")
 	cardFront.images["background"] = imageInfo
 	draw.Draw(front, cardFront.images["background"].area, cardFront.images["background"].image, cardFront.images["background"].point, draw.Over)
 	draw.Draw(back, cardFront.images["background"].area, cardFront.images["background"].image, cardFront.images["background"].point, draw.Over)
 	delete(cardFront.images, "background")
 	imageInfo = cardFront.images["profileIcon"]
-	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/profileicon/%v.png", sinfo.ProfileIconID)), resize.Lanczos3)
+	imageInfo.image = resize.Resize(100, 0, loadImageNoErr(fmt.Sprintf("league/profileicon/%v.png", sinfo.ProfileIconID)), resize.Lanczos3)
 	cardFront.images["profileIcon"] = imageInfo
 	imageInfo = cardFront.images["insignia"]
-	imageInfo.image = resize.Resize(256, 0, loadImage(fmt.Sprintf("league/insignia/%sinsignia.png", strings.ToLower(string(highestRank.Tier)))), resize.Lanczos3)
+	imageInfo.image = resize.Resize(256, 0, loadImageNoErr(fmt.Sprintf("league/insignia/%sinsignia.png", strings.ToLower(string(highestRank.Tier)))), resize.Lanczos3)
 	cardFront.images["insignia"] = imageInfo
 	imageInfo = cardFront.images["solo"]
-	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/rank/%s_%s.png", soloInfo.Tier, soloInfo.Rank)), resize.Lanczos3)
+	imageInfo.image = resize.Resize(100, 0, loadImageNoErr(fmt.Sprintf("league/rank/%s_%s.png", soloInfo.Tier, soloInfo.Rank)), resize.Lanczos3)
 	cardFront.images["solo"] = imageInfo
 	imageInfo = cardFront.images["flex"]
-	imageInfo.image = resize.Resize(100, 0, loadImage(fmt.Sprintf("league/rank/%s_%s.png", flexInfo.Tier, flexInfo.Rank)), resize.Lanczos3)
+	imageInfo.image = resize.Resize(100, 0, loadImageNoErr(fmt.Sprintf("league/rank/%s_%s.png", flexInfo.Tier, flexInfo.Rank)), resize.Lanczos3)
 	cardFront.images["flex"] = imageInfo
 	if soloInfo.Tier == "" {
 		soloInfo.Tier = "Unranked"
@@ -454,12 +453,12 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	}
 	if len(schamps) > 0 {
 		imageInfo = cardFront.images["masteryBorder"]
-		imageInfo.image = loadImage(fmt.Sprintf("league/mastery_border/%v.png", schamps[0].ChampionLevel))
+		imageInfo.image = loadImageNoErr(fmt.Sprintf("league/mastery_border/%v.png", schamps[0].ChampionLevel))
 		cardFront.images["masteryBorder"] = imageInfo
 
 		imageInfo = cardFront.images["masteryChamp"]
-		imageInfo.image = resize.Resize(93, 0, loadImage(fmt.Sprintf("league/champion/%d.png", schamps[0].ChampionID)), resize.Lanczos3)
-		imageInfo.mask = loadImage("league/champmask.png")
+		imageInfo.image = resize.Resize(93, 0, getChampionSquare(int64(schamps[0].ChampionID)), resize.Lanczos3)
+		imageInfo.mask = loadImageNoErr("league/champmask.png")
 		cardFront.images["masteryChamp"] = imageInfo
 		draw.DrawMask(front, cardFront.images["masteryChamp"].area, cardFront.images["masteryChamp"].image, image.ZP, cardFront.images["masteryChamp"].mask, image.ZP, draw.Over)
 		delete(cardFront.images, "masteryChamp")
@@ -530,7 +529,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 			images = mostChampsTemplates(len(champs))
 		}
 		for i := range images {
-			images[i].image = resize.Resize(uint(images[i].area.Dy()), 0, loadImage(champs[i].imageURL), resize.Lanczos3)
+			images[i].image = resize.Resize(uint(images[i].area.Dy()), 0, loadImageNoErr(champs[i].imageURL), resize.Lanczos3)
 		}
 		i := 0
 		for k, v := range images {
@@ -579,7 +578,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 			images = mostChampsTemplates(len(mainChamps))
 		}
 		for i := range images {
-			images[i].image = resize.Resize(75, 0, loadImage(fmt.Sprintf("league/champion/%d.png", mainChamps[i].champ)), resize.Lanczos3)
+			images[i].image = resize.Resize(75, 0, getChampionSquare(int64(mainChamps[i].champ)), resize.Lanczos3)
 		}
 		i := 0
 		for k, v := range images {
@@ -638,7 +637,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 
 	draw.Draw(both, front.Bounds().Add(image.Pt(10, 17)), front, image.ZP, draw.Src)
 	draw.Draw(both, front.Bounds().Add(image.Pt(350, 17)), back, image.ZP, draw.Src)
-	border := loadImage(fmt.Sprintf("league/rank_border/%sborder.png", strings.ToLower(string(highestRank.Tier))))
+	border := loadImageNoErr(fmt.Sprintf("league/rank_border/%sborder.png", strings.ToLower(string(highestRank.Tier))))
 	draw.Draw(both, border.Bounds(), border, image.ZP, draw.Over)
 	draw.Draw(both, border.Bounds().Add(image.Pt(340, 0)), border, image.ZP, draw.Over)
 	return both, nil

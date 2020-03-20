@@ -378,7 +378,7 @@ func aboutcmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 			},
 		},
 		Files: []*discordgo.File{
-			&discordgo.File{
+			{
 				Name:   "Avatar.png",
 				Reader: file,
 			},
@@ -387,7 +387,17 @@ func aboutcmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	s.ChannelMessageSendComplex(m.ChannelID, mesg)
 }
 func feedbackcmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
-	s.ChannelMessageSend(dmchannel, m.ChannelID+" "+m.Author.ID+": "+recombineArgs(args[1:]))
+	guild, _ := s.Guild(m.GuildID)
+	channel, _ := s.Channel(m.ChannelID)
+	s.ChannelMessageSend(dmchannel, fmt.Sprintf("%v(%v) - %v(%v) - %v#%v(%v): %v",
+		guild.Name,
+		m.GuildID,
+		channel.Name,
+		m.ChannelID,
+		m.Author.Username,
+		m.Author.Discriminator,
+		m.Author.ID,
+		recombineArgs(args[1:])))
 }
 
 // Takes an array or strings (the arguments) and combines them into one string separated by spaces

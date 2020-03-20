@@ -78,7 +78,7 @@ func opggPastRanks(c *freetype.Context, username string, region region.Region) c
 	for i, v := range seasonRanks {
 		var text textData
 		ranksImages[i].area = image.Rect(ranksImages[i].area.Min.X, 350, ranksImages[i].area.Max.X, 425)
-		ranksImages[i].image = resize.Resize(75, 0, loadImage(fmt.Sprintf("league/rank/%s_I.png", v)), resize.Lanczos3)
+		ranksImages[i].image = resize.Resize(75, 0, loadImageNoErr(fmt.Sprintf("league/rank/%s_I.png", v)), resize.Lanczos3)
 		ranks.images[fmt.Sprintf("%v%s", seasons[i], v)] = ranksImages[i]
 		text.fontSize = 12
 		text.text = fmt.Sprintf("Season %v", seasons[i])

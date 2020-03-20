@@ -40,3 +40,8 @@ riottest\.go
 logs/
 pixelbot
 commands.bytes
+
+# downloaded images
+#TODO: delete the files, commit, then uncomment these lines
+#league/*/[0-9]*.jpg
+#league/*/[0-9]*.png
