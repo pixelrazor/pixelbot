@@ -83,8 +83,7 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM)
 	logger.Println("Quiting due to signal", <-sc)
 }
-func onReady(s *discordgo.Session, r *discordgo.Ready) {
-	// TODO: fix me
+func onReady(s *discordgo.Session, r *discordgo.Ready) {=
 	s.UpdateGameStatus(0, "/help or @Pixel Bot help")
 }
 
