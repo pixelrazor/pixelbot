@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"image/png"
 	"math/rand"
@@ -11,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/boltdb/bolt"
 
 	"github.com/yuhanfang/riot/constants/region"
 
@@ -34,7 +31,19 @@ var (
 		10: "🔟",
 	}
 	startTime   = time.Now()
-	cmdHandlers = make(map[string]cmdHandler)
+	cmdHandlers = map[string]cmdHandler{
+		"help":     helpcmd,
+		"about":    aboutcmd,
+		"uptime":   uptimecmd,
+		"league":   leaguecmd,
+		"osu":      osucmd,
+		"stats":    statscmd,
+		"feedback": feedbackcmd,
+		"uinfo":    uinfocmd,
+		"cinfo":    cinfocmd,
+		"sinfo":    sinfocmd,
+		"ask":      askcmd,
+	}
 )
 
 type cmdHandler func([]string, *discordgo.Session, *discordgo.MessageCreate)
@@ -333,15 +342,10 @@ func statscmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 	}
-	db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(generalBucket))
-		commandsRun := binary.BigEndian.Uint64(b.Get([]byte("commands")))
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot is currently on %v servers with a reach of %v people! %v commands have been run so far.",
-			commafy(strconv.Itoa(len(s.State.Guilds))),
-			commafy(strconv.Itoa(users)),
-			commafy(strconv.FormatUint(commandsRun, 10))))
-		return nil
-	})
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot is currently on %v servers with a reach of %v people! %v commands have been run so far.",
+		commafy(strconv.Itoa(len(s.State.Guilds))),
+		commafy(strconv.Itoa(users)),
+		commafy(strconv.FormatUint(repo.CommandCount(), 10))))
 }
 func aboutcmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	file, err := os.Open("Avatar.png")

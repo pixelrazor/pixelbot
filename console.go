@@ -1,11 +1,8 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/boltdb/bolt"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -40,20 +37,6 @@ func consoleCmd(cmd []string, discord *discordgo.Session) bool {
 		} else {
 			discord.ChannelMessageSend(dmchannel, "```\n"+"message <channel id> <message>"+"```")
 		}
-	case "quotes":
-		db.View(func(t *bolt.Tx) error {
-			b := t.Bucket([]byte(riotBucket)).Bucket([]byte(riotQuotesBucket))
-			if b == nil {
-				return errors.New("Error getting quotes bucket")
-			}
-			msg := ""
-			b.ForEach(func(k, v []byte) error {
-				msg += "Quote: " + string(v) + "\n"
-				return nil
-			})
-			discord.ChannelMessageSend(dmchannel, "```\n"+msg+"```")
-			return nil
-		})
 	default:
 		discord.ChannelMessageSend(dmchannel, "```\n"+"Command not recognized"+"```")
 	}

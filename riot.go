@@ -17,8 +17,6 @@ import (
 
 	ddragon "github.com/pixelrazor/pixelbot/league"
 
-	"github.com/boltdb/bolt"
-
 	"github.com/yuhanfang/riot/apiclient"
 	"github.com/yuhanfang/riot/constants/champion"
 	"github.com/yuhanfang/riot/constants/lane"
@@ -137,15 +135,8 @@ func riotCheckVerify(playername, discordID string, region region.Region) error {
 	if pcode != code {
 		return errors.New("Error: your verification code does not match the summoner's")
 	}
-	err = db.Update(func(tx *bolt.Tx) error {
-		verify := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotVerifyBucket))
-		err := verify.Put([]byte(fmt.Sprintf("%v%v", discordID, summoner.PUUID)), []byte("1"))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	return err
+	repo.SetRiotVerified(discordID, summoner.PUUID)
+	return nil
 }
 
 func riotSetQuote(discordID, pname, quote string, region region.Region) error {
@@ -156,25 +147,11 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 	if err != nil {
 		return errors.New("Error: Could not find summoner " + pname)
 	}
-	err = db.View(func(tx *bolt.Tx) error {
-		verify := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotVerifyBucket))
-		if result := verify.Get([]byte(fmt.Sprintf("%v%v", discordID, summoner.PUUID))); result != nil {
-			return nil
-		}
+	if repo.RiotVerified(discordID, summoner.PUUID) {
 		return errors.New("Error: You are not verified for this account")
-	})
-	if err != nil {
-		return err
 	}
-	err = db.Update(func(tx *bolt.Tx) error {
-		quotes := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotQuotesBucket))
-		err := quotes.Put([]byte(fmt.Sprintf("%v%v", summoner.PUUID, region)), []byte(quote))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	return err
+	repo.SetRiotQuote(summoner.PUUID, quote)
+	return nil
 }
 
 func riotAddQuote(quote string, tdata map[string]textData, c *freetype.Context) {
@@ -610,14 +587,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	for k, v := range oldRanks.text {
 		cardBack.text[k] = v
 	}
-	_ = db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotQuotesBucket))
-		v := b.Get([]byte(fmt.Sprintf("%v%v", sinfo.PUUID, region)))
-		if v != nil {
-			riotAddQuote(string(v), cardBack.text, c)
-		}
-		return nil
-	})
+	riotAddQuote(repo.RiotQuote(sinfo.PUUID), cardBack.text, c)
 	for _, v := range cardBack.images {
 		draw.Draw(back, v.area, v.image, image.ZP, draw.Over)
 	}

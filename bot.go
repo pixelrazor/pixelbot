@@ -2,56 +2,67 @@ package main
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"github.com/boltdb/bolt"
-	"github.com/yuhanfang/riot/constants/region"
 	"image/png"
 	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
+
+	"github.com/boltdb/bolt"
+	"github.com/pixelrazor/pixelbot/repository"
+	"github.com/yuhanfang/riot/constants/region"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 var (
-	logger    *log.Logger
+	logger *log.Logger
+	// TODO: get this programatically?
+	// myID = "133651422154588161"
 	dmchannel = "460949603496230914" // test bot
 	//dmchannel = "404261686057631748" // real bot
+
+	repo repository.Implementation
 )
 
-func main() { /*
-		os.Mkdir("logs", os.ModeDir)
-		f, _ := os.Create("logs/" + time.Now().Format("2006-01-02_15-04-05") + ".log")
-		defer f.Close()
-		logger = log.New(f, "", log.LstdFlags)*/
-	logger = log.New(os.Stdout, "", log.LstdFlags)
+func main() {
+	logger = log.New(os.Stdout, "", log.LstdFlags) // TODO: logrus ?
 	// Load the API key
-	riotKey := os.Getenv("RIOT_API")
-	osuKey := os.Getenv("OSU_API")
-	discordKey := os.Getenv("DISCORD_API")
-	fmt.Println("Riot api key:", riotKey)
-	fmt.Println("Osu api key:", osuKey)
-	fmt.Println("Discord api key:", discordKey)
+	riotKey, ok := os.LookupEnv("RIOT_API")
+	if !ok {
+		logger.Fatalln("Missing RIOT_API in env")
+	}
+	osuKey, ok := os.LookupEnv("OSU_API")
+	if !ok {
+		logger.Fatalln("Missing OSU_API in env")
+	}
+	discordKey, ok := os.LookupEnv("DISCORD_API")
+	if !ok {
+		logger.Fatalln("Missing DISCORD_API in env")
+	}
+
 	discord, err := discordgo.New("Bot " + discordKey)
 	if err != nil {
 		fmt.Println("Error making discordbot object:", err)
 		return
 	}
-	err = initDB()
+
+	db, err := bolt.Open("pixelbot.db", 0666, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
-		fmt.Println("Error initializing db:", err)
-		return
+		logger.Fatalln("Error opening pixelbot.db:", err)
 	}
+	defer db.Close()
+	repo = repository.NewBolt(db)
 	// Initialize the osu API stuff
-	if err = initOsu(osuKey); err != nil {
+	if err := initOsu(osuKey); err != nil {
 		fmt.Println("Error during initOsu():", err)
 		return
 	}
 	// Initialize the riot API stuff
-	if err = riotInit(riotKey); err != nil {
+	if err := riotInit(riotKey); err != nil {
 		fmt.Println("Error during riotInit():", err)
 		return
 	}
@@ -61,70 +72,30 @@ func main() { /*
 	discord.AddHandler(serverJoin)
 	discord.AddHandler(serverLeave)
 	discord.AddHandler(onReady)
-	err = botInit()
-	if err != nil {
-		fmt.Println("Error in botinit:", err)
-		return
-	}
-	if err = discord.Open(); err != nil {
+	if err := discord.Open(); err != nil {
 		fmt.Println("Error opening discord", err)
 		return
 	}
+	defer discord.Close()
 	defer db.Close()
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
-	select {
-	case sig := <-sc:
-		fmt.Println("Quiting due to signal", sig)
-	}
-	discord.Close()
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM)
+	logger.Println("Quiting due to signal", <-sc)
 }
 func onReady(s *discordgo.Session, r *discordgo.Ready) {
-	s.UpdateStatus(0, "/help or @Pixel Bot help")
+	// TODO: fix me
+	s.UpdateGameStatus(0, "/help or @Pixel Bot help")
 }
-func botInit() error {
-	cmdHandlers["help"] = helpcmd
-	cmdHandlers["about"] = aboutcmd
-	cmdHandlers["uptime"] = uptimecmd
-	cmdHandlers["league"] = leaguecmd
-	cmdHandlers["osu"] = osucmd
-	cmdHandlers["stats"] = statscmd
-	cmdHandlers["feedback"] = feedbackcmd
-	cmdHandlers["uinfo"] = uinfocmd
-	cmdHandlers["cinfo"] = cinfocmd
-	cmdHandlers["sinfo"] = sinfocmd
-	cmdHandlers["ask"] = askcmd
-	return nil
-}
+
 func serverJoin(s *discordgo.Session, m *discordgo.GuildCreate) {
-	db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(generalBucket)).Bucket([]byte(generalServersBucket))
-		server := b.Get([]byte(m.ID))
-		if len(server) == 0 {
-			b.Put([]byte(m.ID),[]byte{1})
-			s.ChannelMessageSend(dmchannel, "I joined "+m.Name+fmt.Sprintf(" (%v members)", m.MemberCount))
-		}
-		return nil
-	})
+	s.ChannelMessageSend(dmchannel, "I joined "+m.Name+fmt.Sprintf(" (%v members) %v %v", m.MemberCount, m.JoinedAt, m.Unavailable))
 }
 func serverLeave(s *discordgo.Session, m *discordgo.GuildDelete) {
-	db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(generalBucket)).Bucket([]byte(generalServersBucket))
-		b.Delete([]byte(m.ID))
-		return nil
-	})
-	s.ChannelMessageSend(dmchannel, "I was removed from "+m.Name)
+	s.ChannelMessageSend(dmchannel, "I was removed from "+m.Name+fmt.Sprintf("%v", m.Unavailable))
 }
 func incrementCommandsRun() {
-	db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(generalBucket))
-		val := binary.BigEndian.Uint64(b.Get([]byte("commands")))
-		cmdBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(cmdBytes, val+1)
-		b.Put([]byte("commands"), cmdBytes)
-		return nil
-	})
+	repo.IncrementCommandCount()
 }
 
 func messageReactAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
