@@ -29,7 +29,7 @@ func consoleCmd(cmd []string, discord *discordgo.Session) bool {
 	case "riotkeys":
 		discord.ChannelMessageSend(dmchannel, "```\n"+"Discord id, code"+"```")
 		for k, v := range riotVerified {
-			discord.ChannelMessageSend(dmchannel, "```\n"+fmt.Sprint(k.dID, ", ", v)+"```")
+			discord.ChannelMessageSend(dmchannel, "```\n"+fmt.Sprint(k, ", ", v)+"```")
 		}
 	case "message":
 		if len(cmd) >= 3 {

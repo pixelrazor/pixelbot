@@ -39,7 +39,6 @@ var riotChamps map[champion.Champion]string
 
 // Initialize some data for use later
 func riotInit(key string) error {
-	riotVerified = make(map[riotVerifyKey]string)
 	riotClient = apiclient.New(key, httpClient, limiter)
 	var patches []string
 	res, err := http.Get("https://ddragon.leagueoflegends.com/api/versions.json")
@@ -92,7 +91,7 @@ func riotInit(key string) error {
 }
 
 func randString(n int) string {
-	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	b := make([]byte, n)
 	for i := range b {
@@ -100,42 +99,37 @@ func randString(n int) string {
 	}
 	return string(b)
 }
+
 func riotVerify(playername, discordID string, region region.Region) (string, error) {
 	summoner, err := riotClient.GetBySummonerName(ctx, region, playername)
 	if err != nil {
 		return "", err
 	}
-	key := riotVerifyKey{discordID, summoner.ID, region}
-	code := randString(13)
-	riotVerified[key] = code
+	code := randString(16)
+	riotVerified[discordID] = riotVerifyData{code: code, puuid: summoner.PUUID, summonerID: summoner.ID, region: region}
 	go func() {
-		<-time.After(24 * time.Hour)
-		_, ok := riotVerified[key]
-		if ok {
-			delete(riotVerified, key)
-		}
+		<-time.After(time.Hour)
+		delete(riotVerified, discordID)
 	}()
 	return code, nil
 }
 
-func riotCheckVerify(playername, discordID string, region region.Region) error {
-	summoner, err := riotClient.GetBySummonerName(ctx, region, playername)
-	if err != nil {
-		return errors.New("Error: could not locate that account")
-	}
-	code, ok := riotVerified[riotVerifyKey{discordID, summoner.ID, region}]
+func riotCheckVerify(discordID string) error {
+	data, ok := riotVerified[discordID]
 	if !ok {
 		return errors.New("Error: You are not currently verified for this account")
 	}
-	pcode, err := riotClient.GetThirdPartyCodeByID(ctx, region, summoner.ID)
+	pcode, err := riotClient.GetThirdPartyCodeByID(ctx, data.region, data.summonerID)
 	if err != nil {
-		fmt.Println(err)
+		logger.Println(err)
 		return errors.New("Unknown error occured")
 	}
-	if pcode != code {
+	if pcode != data.code {
 		return errors.New("Error: your verification code does not match the summoner's")
 	}
-	repo.SetRiotVerified(discordID, summoner.PUUID)
+	delete(riotVerified, discordID)
+
+	repo.SetRiotVerified(data.puuid, discordID)
 	return nil
 }
 
@@ -147,7 +141,7 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 	if err != nil {
 		return errors.New("Error: Could not find summoner " + pname)
 	}
-	if repo.RiotVerified(discordID, summoner.PUUID) {
+	if repo.RiotVerified(summoner.PUUID) != discordID {
 		return errors.New("Error: You are not verified for this account")
 	}
 	repo.SetRiotQuote(summoner.PUUID, quote)
