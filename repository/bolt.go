@@ -70,20 +70,20 @@ func (b *Bolt) RiotQuote(id string) string {
 	return quote
 }
 
-func (b *Bolt) SetRiotVerified(discordID, riotID string) {
+func (b *Bolt) SetRiotVerified(puuid, discordID string) {
 	b.db.Update(func(tx *bolt.Tx) error {
 		verify := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotVerifyBucket))
-		verify.Put([]byte(fmt.Sprintf("%v%v", discordID, riotID)), []byte("1"))
+		verify.Put([]byte(puuid), []byte(discordID))
 		return nil
 	})
 }
 
-func (b *Bolt) RiotVerified(discordID, riotID string) bool {
-	return b.db.View(func(tx *bolt.Tx) error {
+func (b *Bolt) RiotVerified(puuid string) string {
+	ret := ""
+	b.db.View(func(tx *bolt.Tx) error {
 		verify := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotVerifyBucket))
-		if result := verify.Get([]byte(fmt.Sprintf("%v%v", discordID, riotID))); result != nil {
-			return nil
-		}
+		ret = string(verify.Get([]byte(puuid)))
 		return errors.New("Error: You are not verified for this account")
-	}) == nil
+	})
+	return ret
 }
