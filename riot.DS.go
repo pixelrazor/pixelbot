@@ -29,10 +29,11 @@ type errChan struct {
 	value interface{}
 	err   error
 }
-type riotVerifyKey struct {
-	dID    string
-	sID    string
-	region region.Region
+type riotVerifyData struct {
+	code       string
+	puuid      string
+	summonerID string
+	region     region.Region
 }
 type ddchamp struct {
 	ID  string
@@ -54,32 +55,34 @@ func (obj *ddchampions) toMap() map[champion.Champion]string {
 	return newMap
 }
 
-var riotInGameFile = regexp.MustCompile(`[A-Z]+[0-9]?(_[0-9]+)+`)
-var riotVerified map[riotVerifyKey]string
-var riotRegions = map[string]region.Region{
-	"na":   region.NA1,
-	"br":   region.BR1,
-	"eune": region.EUN1,
-	"euw":  region.EUW1,
-	"jp":   region.JP1,
-	"kr":   region.KR,
-	"lan":  region.LA1,
-	"las":  region.LA2,
-	"oce":  region.OC1,
-	"tr":   region.TR1,
-	"ru":   region.RU,
-}
-var riotRanks = map[tier.Tier]int{
-	"IRON":        1,
-	"BRONZE":      2,
-	"SILVER":      3,
-	"GOLD":        4,
-	"PLATINUM":    5,
-	"DIAMOND":     6,
-	"MASTER":      7,
-	"GRANDMASTER": 8,
-	"CHALLENGER":  9,
-}
+var (
+	riotInGameFile = regexp.MustCompile(`[A-Z]+[0-9]?(_[0-9]+)+`)
+	riotVerified   = make(map[string]riotVerifyData)
+	riotRegions    = map[string]region.Region{
+		"na":   region.NA1,
+		"br":   region.BR1,
+		"eune": region.EUN1,
+		"euw":  region.EUW1,
+		"jp":   region.JP1,
+		"kr":   region.KR,
+		"lan":  region.LA1,
+		"las":  region.LA2,
+		"oce":  region.OC1,
+		"tr":   region.TR1,
+		"ru":   region.RU,
+	}
+	riotRanks = map[tier.Tier]int{
+		"IRON":        1,
+		"BRONZE":      2,
+		"SILVER":      3,
+		"GOLD":        4,
+		"PLATINUM":    5,
+		"DIAMOND":     6,
+		"MASTER":      7,
+		"GRANDMASTER": 8,
+		"CHALLENGER":  9,
+	}
+)
 
 func summonerCardFront() cardTemplate {
 	return cardTemplate{

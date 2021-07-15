@@ -71,7 +71,7 @@ func titlefy(text string) string {
 	return strings.Title(strings.ToLower(text))
 }
 
-// Take a number and add commas every three digits, from the left
+// Take a number and add commas every three digits, from the right
 func commafy(s string) string {
 	newLength := len(s) + (len(s)-1)/3
 	newString := make([]byte, newLength)
