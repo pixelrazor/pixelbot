@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"image/png"
 	"math/rand"
@@ -11,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/boltdb/bolt"
 
 	"github.com/yuhanfang/riot/constants/region"
 
@@ -34,7 +31,19 @@ var (
 		10: "🔟",
 	}
 	startTime   = time.Now()
-	cmdHandlers = make(map[string]cmdHandler)
+	cmdHandlers = map[string]cmdHandler{
+		"help":     helpcmd,
+		"about":    aboutcmd,
+		"uptime":   uptimecmd,
+		"league":   leaguecmd,
+		"osu":      osucmd,
+		"stats":    statscmd,
+		"feedback": feedbackcmd,
+		"uinfo":    uinfocmd,
+		"cinfo":    cinfocmd,
+		"sinfo":    sinfocmd,
+		"ask":      askcmd,
+	}
 )
 
 type cmdHandler func([]string, *discordgo.Session, *discordgo.MessageCreate)
@@ -333,15 +342,10 @@ func statscmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 	}
-	db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(generalBucket))
-		commandsRun := binary.BigEndian.Uint64(b.Get([]byte("commands")))
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot is currently on %v servers with a reach of %v people! %v commands have been run so far.",
-			commafy(strconv.Itoa(len(s.State.Guilds))),
-			commafy(strconv.Itoa(users)),
-			commafy(strconv.FormatUint(commandsRun, 10))))
-		return nil
-	})
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Pixel Bot is currently on %v servers with a reach of %v people! %v commands have been run so far.",
+		commafy(strconv.Itoa(len(s.State.Guilds))),
+		commafy(strconv.Itoa(users)),
+		commafy(strconv.FormatUint(repo.CommandCount(), 10))))
 }
 func aboutcmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 	file, err := os.Open("Avatar.png")
@@ -441,13 +445,14 @@ func osucmd(args []string, s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCreate, region region.Region) {
 	var playerName string
-	if len(args) < 2 && strings.ToLower(args[0]) != "help" {
+	cmd := strings.ToLower(args[0])
+	if len(args) < 2 && cmd != "help" && cmd != "verify" {
 		s.ChannelMessageSend(m.ChannelID, "Not enough arguments, please see the 'league help' command")
 		return
-	} else if strings.ToLower(args[0]) != "help" {
+	} else if cmd != "help" && cmd != "verify" {
 		playerName = recombineArgs(args[1:])
 	}
-	switch strings.ToLower(args[0]) {
+	switch cmd {
 	case "player":
 		waitMesg, err := s.ChannelMessageSend(m.ChannelID, "Working on it...")
 		if err != nil {
@@ -554,14 +559,14 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 		}
 		s.ChannelMessageSendComplex(uch.ID, &finalMesg)
 	case "verify":
-		err := riotCheckVerify(playerName, m.Author.ID, region)
+		err := riotCheckVerify(m.Author.ID)
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, err.Error())
 			return
 		}
 
 		logger.Printf("League Verify: %v %v\n", region, playerName)
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("You have succesfully verified for %v (%v)", playerName, region))
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("You have succesfully verified your account!", playerName, region))
 	case "setquote":
 		preParse := recombineArgs(args[1:])
 		delimiter := -1
@@ -596,7 +601,7 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 			Fields: []*discordgo.MessageEmbedField{
 				{
 					Name:  "league <region> code <player name>",
-					Value: "Get a verification code for the specified account. The code expires after 24 hours or if a new one is generated. Use the verify command after following the appropriate steps",
+					Value: "Get a verification code for the specified account. The code expires after 1 hour or if a new one is generated. Use the verify command after following the appropriate steps",
 				},
 				{
 					Name:  "league <region> player <player name>",
@@ -607,7 +612,7 @@ func leagueCommand(args []string, s *discordgo.Session, m *discordgo.MessageCrea
 					Value: "View the current match data of an in-game player",
 				},
 				{
-					Name:  "league <region> verify <player name>",
+					Name:  "league verify",
 					Value: "Check an account's verification code against the generated one",
 				},
 				{

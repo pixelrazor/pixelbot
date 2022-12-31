@@ -17,8 +17,6 @@ import (
 
 	ddragon "github.com/pixelrazor/pixelbot/league"
 
-	"github.com/boltdb/bolt"
-
 	"github.com/yuhanfang/riot/apiclient"
 	"github.com/yuhanfang/riot/constants/champion"
 	"github.com/yuhanfang/riot/constants/lane"
@@ -41,7 +39,6 @@ var riotChamps map[champion.Champion]string
 
 // Initialize some data for use later
 func riotInit(key string) error {
-	riotVerified = make(map[riotVerifyKey]string)
 	riotClient = apiclient.New(key, httpClient, limiter)
 	var patches []string
 	res, err := http.Get("https://ddragon.leagueoflegends.com/api/versions.json")
@@ -94,7 +91,7 @@ func riotInit(key string) error {
 }
 
 func randString(n int) string {
-	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	b := make([]byte, n)
 	for i := range b {
@@ -102,50 +99,38 @@ func randString(n int) string {
 	}
 	return string(b)
 }
+
 func riotVerify(playername, discordID string, region region.Region) (string, error) {
 	summoner, err := riotClient.GetBySummonerName(ctx, region, playername)
 	if err != nil {
 		return "", err
 	}
-	key := riotVerifyKey{discordID, summoner.ID, region}
-	code := randString(13)
-	riotVerified[key] = code
+	code := randString(16)
+	riotVerified[discordID] = riotVerifyData{code: code, puuid: summoner.PUUID, summonerID: summoner.ID, region: region}
 	go func() {
-		<-time.After(24 * time.Hour)
-		_, ok := riotVerified[key]
-		if ok {
-			delete(riotVerified, key)
-		}
+		<-time.After(time.Hour)
+		delete(riotVerified, discordID)
 	}()
 	return code, nil
 }
 
-func riotCheckVerify(playername, discordID string, region region.Region) error {
-	summoner, err := riotClient.GetBySummonerName(ctx, region, playername)
-	if err != nil {
-		return errors.New("Error: could not locate that account")
-	}
-	code, ok := riotVerified[riotVerifyKey{discordID, summoner.ID, region}]
+func riotCheckVerify(discordID string) error {
+	data, ok := riotVerified[discordID]
 	if !ok {
 		return errors.New("Error: You are not currently verified for this account")
 	}
-	pcode, err := riotClient.GetThirdPartyCodeByID(ctx, region, summoner.ID)
+	pcode, err := riotClient.GetThirdPartyCodeByID(ctx, data.region, data.summonerID)
 	if err != nil {
-		fmt.Println(err)
+		logger.Println(err)
 		return errors.New("Unknown error occured")
 	}
-	if pcode != code {
+	if pcode != data.code {
 		return errors.New("Error: your verification code does not match the summoner's")
 	}
-	err = db.Update(func(tx *bolt.Tx) error {
-		verify := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotVerifyBucket))
-		err := verify.Put([]byte(fmt.Sprintf("%v%v", discordID, summoner.PUUID)), []byte("1"))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	return err
+	delete(riotVerified, discordID)
+
+	repo.SetRiotVerified(data.puuid, discordID)
+	return nil
 }
 
 func riotSetQuote(discordID, pname, quote string, region region.Region) error {
@@ -156,25 +141,11 @@ func riotSetQuote(discordID, pname, quote string, region region.Region) error {
 	if err != nil {
 		return errors.New("Error: Could not find summoner " + pname)
 	}
-	err = db.View(func(tx *bolt.Tx) error {
-		verify := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotVerifyBucket))
-		if result := verify.Get([]byte(fmt.Sprintf("%v%v", discordID, summoner.PUUID))); result != nil {
-			return nil
-		}
+	if repo.RiotVerified(summoner.PUUID) != discordID {
 		return errors.New("Error: You are not verified for this account")
-	})
-	if err != nil {
-		return err
 	}
-	err = db.Update(func(tx *bolt.Tx) error {
-		quotes := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotQuotesBucket))
-		err := quotes.Put([]byte(fmt.Sprintf("%v%v", summoner.PUUID, region)), []byte(quote))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	return err
+	repo.SetRiotQuote(summoner.PUUID, quote)
+	return nil
 }
 
 func riotAddQuote(quote string, tdata map[string]textData, c *freetype.Context) {
@@ -610,14 +581,7 @@ func riotPlayerCard(playername *string, region region.Region) (*image.RGBA, erro
 	for k, v := range oldRanks.text {
 		cardBack.text[k] = v
 	}
-	_ = db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(riotBucket)).Bucket([]byte(riotQuotesBucket))
-		v := b.Get([]byte(fmt.Sprintf("%v%v", sinfo.PUUID, region)))
-		if v != nil {
-			riotAddQuote(string(v), cardBack.text, c)
-		}
-		return nil
-	})
+	riotAddQuote(repo.RiotQuote(sinfo.PUUID), cardBack.text, c)
 	for _, v := range cardBack.images {
 		draw.Draw(back, v.area, v.image, image.ZP, draw.Over)
 	}
