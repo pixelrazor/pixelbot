@@ -11,5 +11,5 @@ require (
 	github.com/pixelrazor/osu v0.0.0-20181210060423-a91940e94304
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/yuhanfang/riot v0.0.0-20191205014607-43dd1994728e
-	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d
+	golang.org/x/image v0.5.0
 )
